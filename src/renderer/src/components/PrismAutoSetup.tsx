@@ -3,6 +3,7 @@
 // [PRISM] 2026-05-10 Fix: 支持 apiKey（OpenClaw gateway token）+ 更新 openclaw store
 // [PRISM] 2026-05-10 Fix v2: 修复 existingProviders 在 deps 中导致 persist rehydrate 时
 //   cleanup 取消 timer（effect 只跑一次，用 ref 读取最新 providers 替代 closure）
+// [PRISM] 2026-05-10 Fix v4: 支持 providerType 字段（openai/anthropic），每个 endpoint 独立注册
 // 无 UI 渲染（返回 null）。
 
 import { loggerService } from '@renderer/services/LoggerService'
@@ -48,7 +49,7 @@ const PrismAutoSetup: React.FC = () => {
         let newCount = 0
 
         for (const endpoint of detected) {
-          // 若检测到 OpenClaw，同步更新 openclaw store
+          // 若检测到 OpenClaw 来源的 provider，同步更新 openclaw store（仅第一个触发）
           if (endpoint.providerId.startsWith('prism-openclaw-')) {
             dispatch(setGatewayPort(endpoint.port))
             dispatch(setGatewayStatus('running'))
@@ -62,7 +63,11 @@ const PrismAutoSetup: React.FC = () => {
             continue
           }
 
-          // 构建 Provider 对象（OpenAI 兼容格式）
+          // [PRISM] Fix v4: 使用 endpoint.providerType 而非硬编码 'openai'
+          // 每个 provider 直连其真实 API（google/deepseek → openai-compat, anthropic → anthropic）
+          const providerType = endpoint.providerType ?? 'openai'
+
+          // 构建 Provider 对象
           const models: Model[] = endpoint.models.map((m) => ({
             id: m.id,
             name: m.name,
@@ -72,10 +77,9 @@ const PrismAutoSetup: React.FC = () => {
 
           const provider: Provider = {
             id: endpoint.providerId,
-            type: 'openai',
+            type: providerType,
             name: endpoint.name,
-            // 使用 gateway token（若无则 fallback 到 'no-key-required'）
-            apiKey: endpoint.apiKey ?? 'no-key-required',
+            apiKey: endpoint.apiKey ?? '',
             apiHost: endpoint.apiBase,
             models,
             enabled: true,
@@ -85,7 +89,7 @@ const PrismAutoSetup: React.FC = () => {
           dispatch(addProvider(provider))
           newCount++
           logger.info(
-            `[PRISM] Auto-registered provider: ${endpoint.name} (port ${endpoint.port}), ${models.length} models, token=${endpoint.apiKey ? '✓' : '×'}`
+            `[PRISM] Auto-registered: ${endpoint.name} [${providerType}] apiBase=${endpoint.apiBase} × ${models.length} models`
           )
         }
 

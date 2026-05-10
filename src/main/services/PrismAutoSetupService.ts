@@ -1,8 +1,15 @@
-// [PRISM] 2026-05-10 — Sprint 1: OpenClaw 零配置自动检测服务 (v3)
-// 修复 v2 bug：providerConf.models 实际不存在（providers 只有 baseUrl/api 字段）
-//   → v3 改为独立步骤：先用 bearer token 请求 /v1/models，再 fallback 到 provider keys
-// [PRISM] 2026-05-10 — Sprint 1 Fix v3: robust model discovery for OpenClaw
+// [PRISM] 2026-05-10 — Sprint 1: OpenClaw 零配置自动检测服务 (v4)
+// ─────────────────────────────────────────────────────────────────────────────
+// 根本性修复（v4）：
+//   v1-v3 的问题：把 OpenClaw 作为 HTTP REST proxy 注册（apiBase=:18789/v1）
+//     → POST /v1/chat/completions 永远返回 404，因为 OpenClaw 是 WebSocket 网关，
+//       不暴露任何 REST chat API
+//   v4 修复方案：从 ~/.openclaw/openclaw.json 读取各 provider 的 baseUrl/apiKey
+//     → 每个 provider 注册为独立的 DetectedEndpoint（直连 Google/DeepSeek/Anthropic/LM-Studio）
+//     → 对无 inline apiKey 的 provider（google/deepseek）尝试从 macOS Keychain 读取
+// ─────────────────────────────────────────────────────────────────────────────
 
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -22,18 +29,25 @@ const OPENAI_COMPAT_TARGETS: Array<{ port: number; name: string; providerId: str
   { port: 11434, name: 'Ollama', providerId: 'prism-ollama-11434' }
 ]
 
+/** openclaw.json 单个 provider 结构 */
+interface OpenClawProvider {
+  baseUrl?: string
+  api?: string
+  apiKey?: string
+  models?: Array<{ id: string; name?: string }>
+}
+
+/** openclaw.json 配置文件（仅用到的字段） */
 interface OpenClawConfigFile {
   gateway?: {
     port?: number
     auth?: { mode?: string; token?: string }
   }
   models?: {
-    providers?: Record<string, {
-      baseUrl?: string
-      api?: string
-      // models 数组是可选的 — 实际 openclaw.json 中 providers 可能只有 baseUrl/api
-      models?: Array<{ id: string; name?: string }>
-    }>
+    providers?: Record<string, OpenClawProvider>
+  }
+  auth?: {
+    profiles?: Record<string, { provider?: string; mode?: string }>
   }
 }
 
@@ -43,113 +57,229 @@ export interface DetectedEndpoint {
   providerId: string
   apiBase: string
   models: Array<{ id: string; name: string }>
-  /** Gateway auth token (for protected endpoints like OpenClaw) */
+  /** Provider API key（直连每家厂商的 key，非 OpenClaw gateway token） */
   apiKey?: string
+  /**
+   * Cherry Studio provider type。
+   * 'openai'    = OpenAI-compatible REST（DeepSeek / LM-Studio / Google OpenAI-compat）
+   * 'anthropic' = Anthropic Messages API
+   * @default 'openai'
+   */
+  providerType?: 'openai' | 'anthropic'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// macOS Keychain helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 尝试从 macOS Keychain 读取 provider API key。
+ * OpenClaw 的 profile ID 格式为 "{provider}:default"，因此尝试多种可能的 service/account 组合。
+ */
+function tryKeychainKey(providerKey: string): string | null {
+  if (process.platform !== 'darwin') return null
+
+  const candidates = [
+    // OpenClaw 最可能的格式：service="openclaw", account="{provider}:default"
+    ['openclaw', `${providerKey}:default`],
+    // service="openclaw-{provider}"（无 account 过滤）
+    [`openclaw-${providerKey}`, ''],
+    // service="{provider}", account="openclaw"
+    [providerKey, 'openclaw'],
+    // 通用 API key service 名
+    [`${providerKey}-api-key`, ''],
+    [`${providerKey}-api`, '']
+  ]
+
+  for (const [service, account] of candidates) {
+    try {
+      const accountPart = account ? `-a "${account}"` : ''
+      const cmd = `security find-generic-password -s "${service}" ${accountPart} -w 2>/dev/null`
+      const result = execSync(cmd, {
+        timeout: 3000,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+        .toString()
+        .trim()
+      if (result && result.length > 5) {
+        logger.info(
+          `[PRISM] ✓ Keychain key found for ${providerKey} (service="${service}"${account ? ` account="${account}"` : ''})`
+        )
+        return result
+      }
+    } catch {
+      // 未找到，继续尝试下一个
+    }
+  }
+
+  logger.debug(`[PRISM] No Keychain key found for ${providerKey}`)
+  return null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 将 openclaw api 字段 + providerKey 映射为 Cherry Studio ProviderType */
+function mapProviderType(api: string | undefined, providerKey: string): 'openai' | 'anthropic' {
+  if (api === 'anthropic-messages' || providerKey === 'anthropic') return 'anthropic'
+  return 'openai'
+}
+
+/** provider key → 友好显示名 */
+function providerDisplayName(providerKey: string): string {
+  const map: Record<string, string> = {
+    google: 'Google Gemini',
+    deepseek: 'DeepSeek',
+    'lm-studio': 'LM Studio（本地）',
+    anthropic: 'Anthropic Claude',
+    openai: 'OpenAI',
+    moonshot: 'Moonshot Kimi',
+    ollama: 'Ollama（本地）'
+  }
+  return map[providerKey] ?? providerKey
 }
 
 /**
- * 探测 OpenClaw 实例
- *
- * 策略（v3，各步骤独立 try/catch，互不干扰）：
- * 1. GET /health → {"ok":true,"status":"live"} 确认存活
- * 2. 读取 ~/.openclaw/openclaw.json → 获取 gateway.auth.token
- * 3. 带 Bearer token 请求 /v1/models（检查 content-type 避免 HTML 解析异常）
- * 4. 若 /v1/models 无结果，fallback：从 config providers keys 构建模型列表
- * 5. 无论 models 是否为空，返回 DetectedEndpoint（允许用户后续手动配置）
+ * 规范化 baseUrl 为 Cherry Studio 期望的 apiHost。
+ * - 如果 URL 已包含非根路径（如 /v1beta/openai/），保持原样。
+ * - 纯 host（如 https://api.deepseek.com）→ 追加 /v1（Anthropic 除外）。
  */
-async function probeOpenClaw(port: number): Promise<DetectedEndpoint | null> {
-  // Step 1: 健康检查（轻量、无需鉴权）
+function normalizeApiBase(baseUrl: string, api?: string): string {
+  const clean = baseUrl.replace(/\/+$/, '')
+  try {
+    const url = new URL(clean)
+    if (url.pathname && url.pathname !== '/') {
+      return clean // 已有路径，保持原样
+    }
+  } catch {
+    return clean
+  }
+  if (api === 'anthropic-messages') return clean
+  return `${clean}/v1`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OpenClaw probe（v4）：每个 provider → 独立 DetectedEndpoint
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 探测 OpenClaw 实例（v4）
+ *
+ * 策略：
+ * 1. GET /health → {"ok":true,"status":"live"} 确认存活
+ * 2. 读取 ~/.openclaw/openclaw.json → models.providers
+ * 3. 为每个 provider 构建独立 DetectedEndpoint，使用其真实 baseUrl 直连
+ * 4. apiKey 来源：openclaw.json inline → macOS Keychain → 跳过该 provider
+ *
+ * 返回：每个有效 provider 对应一个 DetectedEndpoint
+ * （port 字段记录 OpenClaw 端口，供 PrismAutoSetup.tsx 更新 openclaw store）
+ */
+async function probeOpenClaw(port: number): Promise<DetectedEndpoint[]> {
+  // Step 1: 健康检查
   try {
     const res = await fetch(`http://127.0.0.1:${port}/health`, {
       signal: AbortSignal.timeout(2000)
     })
-    if (!res.ok) return null
+    if (!res.ok) return []
     const data = (await res.json()) as { ok?: boolean; status?: string }
     if (!data.ok || data.status !== 'live') {
       logger.debug(`[PRISM] Port ${port} /health unexpected payload: ${JSON.stringify(data)}`)
-      return null
+      return []
     }
   } catch (err) {
-    logger.debug(`[PRISM] Port ${port} health probe failed: ${err instanceof Error ? err.message : String(err)}`)
-    return null
+    logger.debug(
+      `[PRISM] Port ${port} health probe failed: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return []
   }
 
-  // Step 2: 读取 token（独立 try/catch，失败不影响后续步骤）
-  let apiKey = ''
+  logger.info(`[PRISM] ✓ OpenClaw alive on port ${port}`)
+
+  // Step 2: 读取 openclaw.json
+  let config: OpenClawConfigFile | null = null
   try {
     if (fs.existsSync(OPENCLAW_CONFIG_PATH)) {
       const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf-8')
-      const config = JSON.parse(raw) as OpenClawConfigFile
-      apiKey = config.gateway?.auth?.token ?? ''
-      logger.info(`[PRISM] Read OpenClaw config: token=${apiKey ? '✓' : '×'}`)
+      config = JSON.parse(raw) as OpenClawConfigFile
+      logger.info('[PRISM] ✓ Read openclaw.json')
     }
   } catch (err) {
-    logger.warn(`[PRISM] Could not read OpenClaw config: ${err instanceof Error ? err.message : String(err)}`)
+    logger.warn(
+      `[PRISM] Could not read openclaw.json: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return []
   }
 
-  // Step 3: 带 token 请求 /v1/models（检查 content-type，避免 HTML 误解析）
-  let models: Array<{ id: string; name: string }> = []
-  try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-    const res = await fetch(`http://127.0.0.1:${port}/v1/models`, {
-      signal: AbortSignal.timeout(3000),
-      headers
-    })
-    if (res.ok) {
-      const contentType = res.headers.get('content-type') ?? ''
-      if (contentType.includes('application/json')) {
-        const data = (await res.json()) as { data?: Array<{ id: string; name?: string }> }
-        models = (data.data ?? []).map((m) => ({ id: m.id, name: m.name ?? m.id }))
-        logger.info(`[PRISM] /v1/models → ${models.length} model(s)`)
+  if (!config) {
+    logger.warn('[PRISM] openclaw.json not found or unreadable')
+    return []
+  }
+
+  const providers = config.models?.providers ?? {}
+  if (Object.keys(providers).length === 0) {
+    logger.warn('[PRISM] openclaw.json has no providers defined')
+    return []
+  }
+
+  // Step 3 & 4: 为每个 provider 构建 DetectedEndpoint
+  const endpoints: DetectedEndpoint[] = []
+
+  for (const [providerKey, providerConf] of Object.entries(providers)) {
+    const baseUrl = providerConf.baseUrl
+    if (!baseUrl) {
+      logger.debug(`[PRISM] Provider ${providerKey}: no baseUrl, skipping`)
+      continue
+    }
+
+    // 构建模型列表（使用 openclaw.json 中的真实模型 ID，不加 provider 前缀）
+    if (!Array.isArray(providerConf.models) || providerConf.models.length === 0) {
+      logger.debug(`[PRISM] Provider ${providerKey}: no models defined, skipping`)
+      continue
+    }
+    const models = providerConf.models.map((m) => ({ id: m.id, name: m.name ?? m.id }))
+
+    // 获取 apiKey：inline → Keychain → skip
+    let apiKey = providerConf.apiKey?.trim() ?? undefined
+    if (!apiKey) {
+      const keychainKey = tryKeychainKey(providerKey)
+      if (keychainKey) {
+        apiKey = keychainKey
       } else {
-        logger.debug(`[PRISM] /v1/models non-JSON response (content-type: ${contentType}), skipping`)
+        logger.warn(
+          `[PRISM] Provider ${providerKey}: no apiKey found (inline or Keychain) — skipping registration`
+        )
+        continue
       }
     }
-  } catch (err) {
-    logger.debug(`[PRISM] /v1/models fetch failed: ${err instanceof Error ? err.message : String(err)}`)
+
+    const apiBase = normalizeApiBase(baseUrl, providerConf.api)
+    const providerType = mapProviderType(providerConf.api, providerKey)
+    const displayName = providerDisplayName(providerKey)
+
+    endpoints.push({
+      port,
+      name: displayName,
+      providerId: `prism-openclaw-${providerKey}`,
+      apiBase,
+      models,
+      apiKey,
+      providerType
+    })
+
+    logger.info(
+      `[PRISM] ✓ Provider ${providerKey}: ${models.length} model(s), type=${providerType}, apiBase=${apiBase}`
+    )
   }
 
-  // Step 4: fallback — 从 openclaw.json providers keys 构建模型列表
-  if (models.length === 0) {
-    try {
-      if (fs.existsSync(OPENCLAW_CONFIG_PATH)) {
-        const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf-8')
-        const config = JSON.parse(raw) as OpenClawConfigFile
-        const providers = config.models?.providers ?? {}
-        for (const [providerKey, providerConf] of Object.entries(providers)) {
-          if (Array.isArray(providerConf.models) && providerConf.models.length > 0) {
-            // 如果 provider 确实带了模型列表
-            for (const m of providerConf.models) {
-              models.push({ id: `${providerKey}/${m.id}`, name: m.name ?? m.id })
-            }
-          } else {
-            // 用 providerKey 本身作为占位模型 ID
-            models.push({ id: providerKey, name: providerKey })
-          }
-        }
-        logger.info(`[PRISM] Fallback: ${models.length} model(s) from provider keys`)
-      }
-    } catch (err) {
-      logger.debug(`[PRISM] Provider-key fallback failed: ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-
-  logger.info(`✅ [PRISM] Detected OpenClaw on port ${port}: ${models.length} model(s), token=${apiKey ? '✓' : '×'}`)
-  return {
-    port,
-    name: `OpenClaw (本地 :${port})`,
-    providerId: `prism-openclaw-${port}`,
-    apiBase: `http://127.0.0.1:${port}/v1`,
-    models,
-    apiKey: apiKey || undefined
-  }
+  logger.info(`[PRISM] OpenClaw port ${port}: ${endpoints.length} provider(s) ready`)
+  return endpoints
 }
 
-/**
- * 探测标准 OpenAI 兼容服务（Ollama 等）
- * 调用 /v1/models 获取模型列表
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard OpenAI-compatible probe（Ollama 等）
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function probeOpenAICompatible(
   port: number,
   name: string,
@@ -175,19 +305,23 @@ async function probeOpenAICompatible(
     }
     const models = rawModels.map((m) => ({ id: m.id, name: m.name ?? m.id }))
     logger.info(`✅ Detected ${name} on port ${port}: ${models.length} model(s)`)
-    return { port, name, providerId, apiBase, models }
+    return { port, name, providerId, apiBase, models, providerType: 'openai' }
   } catch (err) {
     logger.debug(`Port ${port} not reachable: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public entry point
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * 自动检测本地 AI 服务
- * 并发探测 OpenClaw（/health 策略）+ Ollama 等（/v1/models 策略）
+ * 自动检测本地 AI 服务（v4）
+ * 并发探测 OpenClaw（逐 provider 直连）+ Ollama 等（/v1/models 策略）
  */
 export async function detectLocalAIServices(): Promise<DetectedEndpoint[]> {
-  logger.info('Starting local AI service auto-detection...')
+  logger.info('[PRISM] Starting local AI service auto-detection (v4)...')
 
   const [openclawResults, openaiResults] = await Promise.all([
     Promise.all(OPENCLAW_PORTS.map((p) => probeOpenClaw(p))),
@@ -195,15 +329,15 @@ export async function detectLocalAIServices(): Promise<DetectedEndpoint[]> {
   ])
 
   const detected: DetectedEndpoint[] = [
-    ...openclawResults.filter((r): r is DetectedEndpoint => r !== null),
+    ...openclawResults.flat(),
     ...openaiResults.filter((r): r is DetectedEndpoint => r !== null)
   ]
 
   if (detected.length === 0) {
-    logger.info('No local AI services detected')
+    logger.info('[PRISM] No local AI services detected')
   } else {
-    logger.info(`Auto-detection complete: ${detected.length} service(s) found`, {
-      services: detected.map((d) => `${d.name}:${d.port}`)
+    logger.info(`[PRISM] Auto-detection complete: ${detected.length} endpoint(s) found`, {
+      services: detected.map((d) => `${d.name} [${d.providerType ?? 'openai'}] × ${d.models.length} models`)
     })
   }
   return detected
