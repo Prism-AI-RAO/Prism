@@ -1,6 +1,8 @@
 // [PRISM] 2026-05-10 — Sprint 1: Prism 本地 AI 自动检测组件
 // 挂载后静默探测本地运行的 OpenAI 兼容服务，自动注册为 Provider。
 // [PRISM] 2026-05-10 Fix: 支持 apiKey（OpenClaw gateway token）+ 更新 openclaw store
+// [PRISM] 2026-05-10 Fix v2: 修复 existingProviders 在 deps 中导致 persist rehydrate 时
+//   cleanup 取消 timer（effect 只跑一次，用 ref 读取最新 providers 替代 closure）
 // 无 UI 渲染（返回 null）。
 
 import { loggerService } from '@renderer/services/LoggerService'
@@ -18,10 +20,16 @@ const PrismAutoSetup: React.FC = () => {
   const dispatch = useAppDispatch()
   const { t } = useTranslation()
   const existingProviders = useAppSelector((state) => state.llm.providers)
+
+  // [PRISM] Fix: 用 ref 跟踪最新 providers，避免 effect 将 existingProviders 放入 deps
+  // 若放入 deps，persist rehydrate 时 effect cleanup 会取消 1.5s timer，导致检测从不执行
+  const existingProvidersRef = useRef<Provider[]>(existingProviders)
+  existingProvidersRef.current = existingProviders  // 每次渲染同步最新值
+
   const hasRun = useRef(false)
 
   useEffect(() => {
-    // 只在首次挂载执行一次
+    // 只在首次挂载执行一次，空 deps 确保 timer 不被 cleanup 取消
     if (hasRun.current) return
     hasRun.current = true
 
@@ -35,6 +43,8 @@ const PrismAutoSetup: React.FC = () => {
           return
         }
 
+        // 读取最新 providers（通过 ref，避免 stale closure）
+        const currentProviders = existingProvidersRef.current
         let newCount = 0
 
         for (const endpoint of detected) {
@@ -46,7 +56,7 @@ const PrismAutoSetup: React.FC = () => {
           }
 
           // 幂等：若 provider 已存在，跳过
-          const alreadyExists = existingProviders.some((p) => p.id === endpoint.providerId)
+          const alreadyExists = currentProviders.some((p) => p.id === endpoint.providerId)
           if (alreadyExists) {
             logger.info(`[PRISM] Provider "${endpoint.providerId}" already exists, skipping.`)
             continue
@@ -82,7 +92,7 @@ const PrismAutoSetup: React.FC = () => {
         // 有新 provider 时显示 toast 提示
         if (newCount > 0) {
           const totalModels = detected
-            .filter((d) => !existingProviders.some((p) => p.id === d.providerId))
+            .filter((d) => !currentProviders.some((p) => p.id === d.providerId))
             .reduce((sum, d) => sum + d.models.length, 0)
 
           message.success(
@@ -101,9 +111,11 @@ const PrismAutoSetup: React.FC = () => {
     }
 
     // 延迟 1.5s 等 Redux persist 恢复完成后再执行
+    // 注意：空 deps 确保此 effect 只挂载一次，timer 不会被 persist rehydrate 打断
     const timer = setTimeout(runDetection, 1500)
     return () => clearTimeout(timer)
-  }, [dispatch, existingProviders, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // 空 deps — 只在挂载时跑一次，通过 ref 读取最新 providers
 
   return null
 }

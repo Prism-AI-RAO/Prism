@@ -1,7 +1,7 @@
-// [PRISM] 2026-05-10 — Sprint 1: OpenClaw 零配置自动检测服务 (v2)
-// 修复：OpenClaw 不暴露无鉴权的 /v1/models（SPA 拦截或需 token）
-//       改用 /health 探测 + 读取 ~/.openclaw/openclaw.json 获取 token + 模型列表
-// [PRISM] 2026-05-10 — Sprint 1 Fix: Use /health for OpenClaw, read config for token & models
+// [PRISM] 2026-05-10 — Sprint 1: OpenClaw 零配置自动检测服务 (v3)
+// 修复 v2 bug：providerConf.models 实际不存在（providers 只有 baseUrl/api 字段）
+//   → v3 改为独立步骤：先用 bearer token 请求 /v1/models，再 fallback 到 provider keys
+// [PRISM] 2026-05-10 — Sprint 1 Fix v3: robust model discovery for OpenClaw
 
 import fs from 'node:fs'
 import os from 'node:os'
@@ -25,11 +25,14 @@ const OPENAI_COMPAT_TARGETS: Array<{ port: number; name: string; providerId: str
 interface OpenClawConfigFile {
   gateway?: {
     port?: number
-    auth?: { token?: string }
+    auth?: { mode?: string; token?: string }
   }
   models?: {
     providers?: Record<string, {
-      models: Array<{ id: string; name?: string }>
+      baseUrl?: string
+      api?: string
+      // models 数组是可选的 — 实际 openclaw.json 中 providers 可能只有 baseUrl/api
+      models?: Array<{ id: string; name?: string }>
     }>
   }
 }
@@ -47,10 +50,12 @@ export interface DetectedEndpoint {
 /**
  * 探测 OpenClaw 实例
  *
- * 策略：
+ * 策略（v3，各步骤独立 try/catch，互不干扰）：
  * 1. GET /health → {"ok":true,"status":"live"} 确认存活
- * 2. 读取 ~/.openclaw/openclaw.json 获取 gateway token 和模型列表
- * 3. 若配置文件不存在，fallback 到带 token 的 /v1/models
+ * 2. 读取 ~/.openclaw/openclaw.json → 获取 gateway.auth.token
+ * 3. 带 Bearer token 请求 /v1/models（检查 content-type 避免 HTML 解析异常）
+ * 4. 若 /v1/models 无结果，fallback：从 config providers keys 构建模型列表
+ * 5. 无论 models 是否为空，返回 DetectedEndpoint（允许用户后续手动配置）
  */
 async function probeOpenClaw(port: number): Promise<DetectedEndpoint | null> {
   // Step 1: 健康检查（轻量、无需鉴权）
@@ -61,50 +66,76 @@ async function probeOpenClaw(port: number): Promise<DetectedEndpoint | null> {
     if (!res.ok) return null
     const data = (await res.json()) as { ok?: boolean; status?: string }
     if (!data.ok || data.status !== 'live') {
-      logger.debug(`Port ${port} /health returned unexpected payload: ${JSON.stringify(data)}`)
+      logger.debug(`[PRISM] Port ${port} /health unexpected payload: ${JSON.stringify(data)}`)
       return null
     }
   } catch (err) {
-    logger.debug(`Port ${port} OpenClaw health probe failed: ${err instanceof Error ? err.message : String(err)}`)
+    logger.debug(`[PRISM] Port ${port} health probe failed: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 
-  // Step 2: 读取本地配置获取 token + 模型列表
+  // Step 2: 读取 token（独立 try/catch，失败不影响后续步骤）
   let apiKey = ''
-  let models: Array<{ id: string; name: string }> = []
-
   try {
-    const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf-8')
-    const config = JSON.parse(raw) as OpenClawConfigFile
-    apiKey = config.gateway?.auth?.token ?? ''
-    const providers = config.models?.providers ?? {}
-    for (const [providerKey, providerConf] of Object.entries(providers)) {
-      for (const m of providerConf.models) {
-        // OpenClaw 以 "providerKey/modelId" 形式路由请求
-        models.push({ id: `${providerKey}/${m.id}`, name: m.name ?? m.id })
-      }
+    if (fs.existsSync(OPENCLAW_CONFIG_PATH)) {
+      const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf-8')
+      const config = JSON.parse(raw) as OpenClawConfigFile
+      apiKey = config.gateway?.auth?.token ?? ''
+      logger.info(`[PRISM] Read OpenClaw config: token=${apiKey ? '✓' : '×'}`)
     }
-    logger.info(`Read OpenClaw config: token=${apiKey ? '✓' : '×'}, models=${models.length}`)
-  } catch {
-    logger.debug(`OpenClaw config not found at ${OPENCLAW_CONFIG_PATH}, trying /v1/models fallback`)
-    // Step 3: fallback — 尝试带 token 的 /v1/models（token 此时为空串，可能仍失败）
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-      const res = await fetch(`http://127.0.0.1:${port}/v1/models`, {
-        signal: AbortSignal.timeout(2000),
-        headers
-      })
-      if (res.ok) {
+  } catch (err) {
+    logger.warn(`[PRISM] Could not read OpenClaw config: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // Step 3: 带 token 请求 /v1/models（检查 content-type，避免 HTML 误解析）
+  let models: Array<{ id: string; name: string }> = []
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+    const res = await fetch(`http://127.0.0.1:${port}/v1/models`, {
+      signal: AbortSignal.timeout(3000),
+      headers
+    })
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') ?? ''
+      if (contentType.includes('application/json')) {
         const data = (await res.json()) as { data?: Array<{ id: string; name?: string }> }
         models = (data.data ?? []).map((m) => ({ id: m.id, name: m.name ?? m.id }))
+        logger.info(`[PRISM] /v1/models → ${models.length} model(s)`)
+      } else {
+        logger.debug(`[PRISM] /v1/models non-JSON response (content-type: ${contentType}), skipping`)
       }
-    } catch {
-      // 静默忽略，模型列表为空也能注册 provider
+    }
+  } catch (err) {
+    logger.debug(`[PRISM] /v1/models fetch failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // Step 4: fallback — 从 openclaw.json providers keys 构建模型列表
+  if (models.length === 0) {
+    try {
+      if (fs.existsSync(OPENCLAW_CONFIG_PATH)) {
+        const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf-8')
+        const config = JSON.parse(raw) as OpenClawConfigFile
+        const providers = config.models?.providers ?? {}
+        for (const [providerKey, providerConf] of Object.entries(providers)) {
+          if (Array.isArray(providerConf.models) && providerConf.models.length > 0) {
+            // 如果 provider 确实带了模型列表
+            for (const m of providerConf.models) {
+              models.push({ id: `${providerKey}/${m.id}`, name: m.name ?? m.id })
+            }
+          } else {
+            // 用 providerKey 本身作为占位模型 ID
+            models.push({ id: providerKey, name: providerKey })
+          }
+        }
+        logger.info(`[PRISM] Fallback: ${models.length} model(s) from provider keys`)
+      }
+    } catch (err) {
+      logger.debug(`[PRISM] Provider-key fallback failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  logger.info(`✅ Detected OpenClaw on port ${port}: ${models.length} model(s)`)
+  logger.info(`✅ [PRISM] Detected OpenClaw on port ${port}: ${models.length} model(s), token=${apiKey ? '✓' : '×'}`)
   return {
     port,
     name: `OpenClaw (本地 :${port})`,
