@@ -865,7 +865,8 @@ export const BuiltinMCPServerNames = {
   didiMCP: '@cherry/didi-mcp',
   browser: '@cherry/browser',
   nowledgeMem: '@cherry/nowledge-mem',
-  hub: '@cherry/hub'
+  hub: '@cherry/hub',
+  prismMemory: '@prism/memory' // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
 } as const
 
 export type BuiltinMCPServerName = (typeof BuiltinMCPServerNames)[keyof typeof BuiltinMCPServerNames]

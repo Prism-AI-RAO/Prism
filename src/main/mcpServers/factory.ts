@@ -12,6 +12,7 @@ import FileSystemServer from './filesystem'
 import { resolveFilesystemBaseDir } from './filesystem/config'
 import HubServer from './hub'
 import MemoryServer from './memory'
+import PrismMemoryServer from './prismMemory' // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
 import PythonServer from './python'
 import ThinkingServer from './sequentialthinking'
 
@@ -56,6 +57,9 @@ export function createInMemoryMCPServer(
     }
     case BuiltinMCPServerNames.hub: {
       return new HubServer().server
+    }
+    case BuiltinMCPServerNames.prismMemory: { // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
+      return new PrismMemoryServer().server
     }
     default:
       throw new Error(`Unknown in-memory MCP server: ${name}`)

@@ -243,6 +243,17 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
     provider: 'Nowledge',
     installSource: 'builtin',
     isTrusted: true
+  },
+  // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
+  // 自动启用的内置记忆 MCP 服务器，AI 助手可通过 prism_memory_* 工具跨会话记住用户信息
+  {
+    id: nanoid(),
+    name: BuiltinMCPServerNames.prismMemory,
+    type: 'inMemory',
+    isActive: true,
+    provider: 'PrismAI',
+    installSource: 'builtin',
+    isTrusted: true
   }
 ] as const
 
