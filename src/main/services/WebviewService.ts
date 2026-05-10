@@ -11,12 +11,13 @@ const logger = loggerService.withContext('WebviewService')
 
 /**
  * init the useragent of the webview session
- * remove the CherryStudio and Electron from the useragent
+ * remove the Prism and Electron from the useragent
  */
 export function initSessionUserAgent() {
   const wvSession = session.fromPartition('persist:webview')
   const originUA = wvSession.getUserAgent()
-  const newUA = originUA.replace(/CherryStudio\/\S+\s/, '').replace(/Electron\/\S+\s/, '')
+  // [PRISM] 2026-05-10 — 品牌替换：CherryStudio → Prism in UA regex
+  const newUA = originUA.replace(/Prism\/\S+\s/, '').replace(/CherryStudio\/\S+\s/, '').replace(/Electron\/\S+\s/, '')
 
   wvSession.setUserAgent(newUA)
   wvSession.webRequest.onBeforeSendHeaders((details, cb) => {

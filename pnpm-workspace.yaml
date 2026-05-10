@@ -1,8 +1,24 @@
 packages:
   - 'packages/*'
 
+allowBuilds:
+  '@j178/prek': true
+  '@paymoapp/electron-shutdown-handler': true
+  '@scarf/scarf': true
+  '@swc/core': true
+  core-js: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  msw: true
+  protobufjs: true
+  registry-js: true
+  selection-hook: true
+  sharp: true
+  tesseract.js: true
+
 supportedArchitectures:
   os:
-  - current
+    - current
   cpu:
-  - current
+    - current

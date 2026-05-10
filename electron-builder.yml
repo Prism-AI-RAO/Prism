@@ -1,5 +1,6 @@
-appId: com.kangfenmao.CherryStudio
-productName: Cherry Studio
+# [PRISM] 2026-05-10 — 品牌替换：productName + appId
+appId: com.prism-ai.Prism
+productName: Prism
 electronLanguages:
   - zh-CN
   - zh-TW
@@ -14,9 +15,9 @@ directories:
   buildResources: build
 
 protocols:
-  - name: Cherry Studio
+  - name: Prism
     schemes:
-      - cherrystudio
+      - prism
 files:
   - "**/*"
   - "!**/{.vscode,.yarn,.yarn-lock,.github,.cursorrules,.prettierrc}"

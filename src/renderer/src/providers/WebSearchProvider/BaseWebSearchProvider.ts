@@ -26,7 +26,7 @@ export default abstract class BaseWebSearchProvider {
   public defaultHeaders() {
     return {
       'HTTP-Referer': 'https://cherry-ai.com',
-      'X-Title': 'Cherry Studio'
+      'X-Title': 'Prism' // [PRISM] 2026-05-10 — 品牌替换
     }
   }
 

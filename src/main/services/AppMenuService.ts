@@ -111,13 +111,14 @@ export class AppMenuService {
           {
             label: appMenu.feedback,
             click: () => {
-              void shell.openExternal('https://github.com/CherryHQ/cherry-studio/issues/new/choose')
+              // [PRISM] 2026-05-10 — 品牌替换：GitHub 链接指向 Prism 仓库
+              void shell.openExternal('https://github.com/Prism-AI-RAO/Prism/issues/new/choose')
             }
           },
           {
             label: appMenu.releases,
             click: () => {
-              void shell.openExternal('https://github.com/CherryHQ/cherry-studio/releases')
+              void shell.openExternal('https://github.com/Prism-AI-RAO/Prism/releases')
             }
           }
         ]

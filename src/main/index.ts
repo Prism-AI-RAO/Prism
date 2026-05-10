@@ -51,7 +51,7 @@ const logger = loggerService.withContext('MainEntry')
 // enable local crash reports
 crashReporter.start({
   companyName: 'CherryHQ',
-  productName: 'CherryStudio',
+  productName: 'Prism' // [PRISM] 2026-05-10 — 品牌替换,
   submitURL: '',
   uploadToServer: false
 })
@@ -87,8 +87,8 @@ if (isLinux && process.env.XDG_SESSION_TYPE === 'wayland') {
  * This ensures the window manager identifies the app correctly on both X11 and Wayland
  */
 if (isLinux) {
-  app.commandLine.appendSwitch('class', 'CherryStudio')
-  app.commandLine.appendSwitch('name', 'CherryStudio')
+  app.commandLine.appendSwitch('class', 'Prism') // [PRISM] 2026-05-10
+  app.commandLine.appendSwitch('name', 'Prism') // [PRISM] 2026-05-10
 }
 
 // DocumentPolicyIncludeJSCallStacksInCrashReports: Enable features for unresponsive renderer js call stacks
@@ -146,7 +146,7 @@ if (!app.requestSingleInstanceLock()) {
 
     initWebviewHotkeys()
     // Set app user model id for windows
-    electronApp.setAppUserModelId(import.meta.env.VITE_MAIN_BUNDLE_ID || 'com.kangfenmao.CherryStudio')
+    electronApp.setAppUserModelId(import.meta.env.VITE_MAIN_BUNDLE_ID || 'com.prism-ai.Prism' // [PRISM] 2026-05-10 — 品牌替换)
 
     // Mac: Hide dock icon before window creation when launch to tray is set
     const isLaunchToTray = configManager.getLaunchToTray()

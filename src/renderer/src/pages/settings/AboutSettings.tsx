@@ -87,7 +87,8 @@ const AboutSettings: FC = () => {
   const showReleases = async () => {
     const { appPath } = await window.api.getAppInfo()
     openSmartMinapp({
-      id: 'cherrystudio-releases',
+      // [PRISM] 2026-05-10 — 品牌替换：cherrystudio-releases → prism-releases
+      id: 'prism-releases',
       name: t('settings.about.releases.title'),
       url: `file://${appPath}/resources/cherry-studio/releases.html?theme=${theme === ThemeMode.dark ? 'dark' : 'light'}`,
       logo: AppLogo
@@ -179,7 +180,8 @@ const AboutSettings: FC = () => {
         <SettingTitle>
           {t('settings.about.title')}
           <HStack alignItems="center">
-            <Link to="https://github.com/CherryHQ/cherry-studio">
+            {/* [PRISM] 2026-05-10 — 品牌替换：GitHub 链接指向 Prism 仓库 */}
+            <Link to="https://github.com/Prism-AI-RAO/Prism">
               <GithubOutlined style={{ marginRight: 4, color: 'var(--color-text)', fontSize: 20 }} />
             </Link>
           </HStack>
@@ -187,7 +189,7 @@ const AboutSettings: FC = () => {
         <SettingDivider />
         <AboutHeader>
           <Row align="middle">
-            <AvatarWrapper onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio')}>
+            <AvatarWrapper onClick={() => onOpenWebsite('https://github.com/Prism-AI-RAO/Prism')}>
               {update.downloadProgress > 0 && (
                 <ProgressCircle
                   type="circle"
@@ -204,7 +206,7 @@ const AboutSettings: FC = () => {
               <Title>{APP_NAME}</Title>
               <Description>{t('settings.about.description')}</Description>
               <Tag
-                onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio/releases')}
+                onClick={() => onOpenWebsite('https://github.com/Prism-AI-RAO/Prism/releases')}
                 color="cyan"
                 style={{ marginTop: 8, cursor: 'pointer' }}>
                 v{version}
@@ -307,7 +309,7 @@ const AboutSettings: FC = () => {
             <Github size={18} />
             {t('settings.about.feedback.title')}
           </SettingRowTitle>
-          <Button onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio/issues/new/choose')}>
+          <Button onClick={() => onOpenWebsite('https://github.com/Prism-AI-RAO/Prism/issues/new/choose')}>
             {t('settings.about.feedback.button')}
           </Button>
         </SettingRow>

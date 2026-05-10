@@ -162,7 +162,7 @@ export function getAllFiles(dirPath: string, arrayOfFiles: FileMetadata[] = []):
 }
 
 export function getTempDir() {
-  return path.join(app.getPath('temp'), 'CherryStudio')
+  return path.join(app.getPath('temp'), 'Prism') // [PRISM] 2026-05-10 — 品牌替换
 }
 
 export function getFilesDir() {

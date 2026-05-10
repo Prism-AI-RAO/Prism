@@ -149,7 +149,8 @@ class BackupManager {
     return {
       version: 6,
       timestamp: Date.now(),
-      appName: 'Cherry Studio',
+      // [PRISM] 2026-05-10 — 品牌替换：新备份标记为 Prism
+      appName: 'Prism',
       appVersion: app.getVersion(),
       platform: process.platform,
       arch: process.arch
@@ -580,9 +581,9 @@ class BackupManager {
       const metadataPath = path.join(this.tempDir, 'metadata.json')
       const metadata = await fs.readJson(metadataPath)
 
-      // Validate appName to ensure backup is from Cherry Studio
-      if (metadata.appName !== 'Cherry Studio') {
-        throw new Error('This backup file is not from Cherry Studio and cannot be restored')
+      // [PRISM] 2026-05-10 — 兼容性：同时接受 Cherry Studio 和 Prism 备份文件
+      if (metadata.appName !== 'Prism' && metadata.appName !== 'Cherry Studio') {
+        throw new Error('This backup file is not from Prism (or Cherry Studio) and cannot be restored')
       }
 
       // Warn about cross-platform restore

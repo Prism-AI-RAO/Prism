@@ -9,7 +9,8 @@ import {
   updateMemorySystemPrompt
 } from '@renderer/utils/memory-prompts'
 import type { MemoryConfig, MemoryItem } from '@types'
-import jaison from 'jaison/lib/index.js'
+// [PRISM] 2026-05-10 — Fix: jaison ships raw TS, use main entry so esbuild pre-bundles it correctly
+import jaison from 'jaison'
 
 import { fetchGenerate } from './ApiService'
 import MemoryService from './MemoryService'

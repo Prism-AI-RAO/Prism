@@ -1,11 +1,11 @@
 {
-  "name": "CherryStudio",
-  "version": "1.9.4",
+  "name": "Prism",
+  "version": "0.1.0",
   "private": true,
-  "description": "A powerful AI assistant for producer.",
-  "desktopName": "CherryStudio.desktop",
+  "description": "Local-first AI productivity platform — ONE GATEWAY · ALL AI",
+  "desktopName": "Prism.desktop",
   "main": "./out/main/index.js",
-  "author": "support@cherry-ai.com",
+  "author": "matrix.sunmoon@gmail.com",
   "homepage": "https://github.com/CherryHQ/cherry-studio",
   "engines": {
     "node": ">=24.11.1"
@@ -71,7 +71,6 @@
     "bench:renderer": "vitest bench --run --project renderer",
     "bench:aicore": "vitest bench --run --project aiCore",
     "bench:shared": "vitest bench --run --project shared",
-    "prepare": "git config blame.ignoreRevsFile .git-blame-ignore-revs && prek install",
     "claude": "dotenv -e .env -- claude",
     "changeset": "changeset",
     "changeset:status": "changeset status",
@@ -520,7 +519,6 @@
       "zipfile"
     ]
   },
-  "packageManager": "pnpm@10.27.0",
   "optionalDependencies": {
     "@img/sharp-darwin-arm64": "0.34.5",
     "@img/sharp-darwin-x64": "0.34.5",

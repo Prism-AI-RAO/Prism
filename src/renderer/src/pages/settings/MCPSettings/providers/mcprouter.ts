@@ -61,7 +61,7 @@ export const syncMCPRouterServers = async (
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
         'HTTP-Referer': 'https://cherry-ai.com',
-        'X-Title': 'Cherry Studio'
+        'X-Title': 'Prism' // [PRISM] 2026-05-10 — 品牌替换
       },
       body: JSON.stringify({})
     })

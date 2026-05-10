@@ -33,12 +33,11 @@ export default defineConfig({
         '@shared': resolve('packages/shared'),
         '@logger': resolve('src/main/services/LoggerService'),
         '@mcp-trace/trace-core': resolve('packages/mcp-trace/trace-core'),
-        '@mcp-trace/trace-node': resolve('packages/mcp-trace/trace-node')
-      }
+        '@mcp-trace/trace-node': resolve('packages/mcp-trace/trace-node'),      }
     },
     build: {
       rollupOptions: {
-        external: ['bufferutil', 'utf-8-validate', 'electron', ...Object.keys(pkg.dependencies)],
+        external: ['bufferutil', 'utf-8-validate', 'electron', 'moment', ...Object.keys(pkg.dependencies)],
         output: {
           manualChunks: undefined, // 彻底禁用代码分割 - 返回 null 强制单文件打包
           inlineDynamicImports: true // 内联所有动态导入，这是关键配置
@@ -52,6 +51,7 @@ export default defineConfig({
     },
     esbuild: isProd ? { legalComments: 'none' } : {},
     optimizeDeps: {
+      exclude: ['jaison'],
       noDiscovery: isDev
     }
   },
@@ -95,8 +95,10 @@ export default defineConfig({
         '@cherrystudio/ai-sdk-provider': resolve('packages/ai-sdk-provider/src')
       }
     },
+    // [PRISM] 2026-05-10 — Fix: jaison moved from exclude→include so esbuild pre-bundles/transpiles the .ts source
     optimizeDeps: {
       exclude: ['pyodide'],
+      include: ['jaison'],
       esbuildOptions: {
         target: 'esnext' // for dev
       }

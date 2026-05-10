@@ -88,5 +88,5 @@ export function getSystemInfo(): SystemInfo {
 export function generateUserAgent(): string {
   const systemInfo = getSystemInfo()
 
-  return `Mozilla/5.0 (${systemInfo.osString}; ${systemInfo.archString}) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/${systemInfo.appVersion} Chrome/124.0.0.0 Safari/537.36`
+  return `Mozilla/5.0 (${systemInfo.osString}; ${systemInfo.archString}) AppleWebKit/537.36 (KHTML, like Gecko) Prism/${systemInfo.appVersion} // [PRISM] 2026-05-10 — 品牌替换 Chrome/124.0.0.0 Safari/537.36`
 }

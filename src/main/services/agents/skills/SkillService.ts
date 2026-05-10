@@ -518,7 +518,7 @@ export class SkillService {
     // Fetch skill detail to get download URL
     const detailUrl = `https://api.clawhub.ai/api/v1/skills/${slug}`
     const detailResp = await net.fetch(detailUrl, {
-      headers: { 'User-Agent': 'CherryStudio' }
+      headers: { 'User-Agent': 'Prism' } // [PRISM] 2026-05-10
     })
 
     if (!detailResp.ok) {
@@ -528,7 +528,7 @@ export class SkillService {
     // Download the skill zip
     const downloadUrl = `https://api.clawhub.ai/api/v1/skills/${slug}/download`
     const downloadResp = await net.fetch(downloadUrl, {
-      headers: { 'User-Agent': 'CherryStudio' }
+      headers: { 'User-Agent': 'Prism' } // [PRISM] 2026-05-10
     })
 
     if (!downloadResp.ok) {

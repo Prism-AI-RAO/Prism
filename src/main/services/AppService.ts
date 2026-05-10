@@ -49,7 +49,7 @@ export class AppService {
           // Create desktop file content
           const desktopContent = `[Desktop Entry]
   Type=Application
-  Name=Cherry Studio
+  Name=Prism // [PRISM] 2026-05-10
   Comment=A powerful AI assistant for producer.
   Exec=${executablePath}
   Icon=cherrystudio
