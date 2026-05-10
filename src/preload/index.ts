@@ -837,6 +837,7 @@ const api = {
     trackTokenUsage: (data: TokenUsageData) => ipcRenderer.invoke(IpcChannel.Analytics_TrackTokenUsage, data)
   },
   // [PRISM] 2026-05-10 — Sprint 1: Prism 专属 API
+  // [PRISM] 2026-05-10 Fix: 添加 apiKey 字段支持 OpenClaw gateway token
   prism: {
     detectLocalAI: (): Promise<
       Array<{
@@ -845,6 +846,8 @@ const api = {
         providerId: string
         apiBase: string
         models: Array<{ id: string; name: string }>
+        /** Gateway auth token (e.g. OpenClaw requires Bearer token) */
+        apiKey?: string
       }>
     > => ipcRenderer.invoke(IpcChannel.Prism_DetectLocalAI)
   }

@@ -599,6 +599,8 @@ class OpenClawService {
 
   /**
    * Get Gateway status. Probes the port when idle to detect externally-started gateways.
+   * [PRISM] 2026-05-10 — Also probe port 18789 for RAO's pre-installed OpenClaw instance.
+   * Priority: current port → 18789 (user's local instance) → 18790 (default managed instance)
    */
   public async getStatus(): Promise<{ status: GatewayStatus; port: number }> {
     if (this.gatewayStatus === 'starting') {
@@ -612,6 +614,32 @@ class OpenClawService {
     } else if (status === 'unhealthy' && this.gatewayStatus === 'running') {
       logger.warn(`Gateway on port ${this.gatewayPort} is no longer reachable, marking as stopped`)
       this.gatewayStatus = 'stopped'
+    }
+
+    // [PRISM] 2026-05-10 — If not running on current port, probe alternative ports
+    // to auto-detect a pre-installed OpenClaw (e.g. RAO's instance on 18789)
+    if (this.gatewayStatus !== 'running') {
+      const alternatePorts = [18789, 18790].filter((p) => p !== this.gatewayPort)
+      for (const altPort of alternatePorts) {
+        try {
+          const res = await fetch(`http://127.0.0.1:${altPort}/health`, {
+            signal: AbortSignal.timeout(2000)
+          })
+          if (res.ok) {
+            const data = (await res.json()) as { ok?: boolean; status?: string }
+            if (data.ok && data.status === 'live') {
+              logger.info(`[PRISM] Detected externally running OpenClaw on alt port ${altPort}, switching`)
+              this.gatewayPort = altPort
+              this.gatewayStatus = 'running'
+              // Load auth token from config for the newly detected instance
+              this.loadAuthTokenFromConfig()
+              break
+            }
+          }
+        } catch {
+          // Port not reachable, try next
+        }
+      }
     }
 
     return {

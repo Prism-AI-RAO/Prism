@@ -1,10 +1,12 @@
 // [PRISM] 2026-05-10 — Sprint 1: Prism 本地 AI 自动检测组件
 // 挂载后静默探测本地运行的 OpenAI 兼容服务，自动注册为 Provider。
+// [PRISM] 2026-05-10 Fix: 支持 apiKey（OpenClaw gateway token）+ 更新 openclaw store
 // 无 UI 渲染（返回 null）。
 
 import { loggerService } from '@renderer/services/LoggerService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
 import { addProvider } from '@renderer/store/llm'
+import { setGatewayPort, setGatewayStatus } from '@renderer/store/openclaw'
 import type { Model, Provider } from '@renderer/types'
 import { message } from 'antd'
 import { useEffect, useRef } from 'react'
@@ -36,6 +38,13 @@ const PrismAutoSetup: React.FC = () => {
         let newCount = 0
 
         for (const endpoint of detected) {
+          // 若检测到 OpenClaw，同步更新 openclaw store
+          if (endpoint.providerId.startsWith('prism-openclaw-')) {
+            dispatch(setGatewayPort(endpoint.port))
+            dispatch(setGatewayStatus('running'))
+            logger.info(`[PRISM] OpenClaw detected at port ${endpoint.port}, openclaw store updated.`)
+          }
+
           // 幂等：若 provider 已存在，跳过
           const alreadyExists = existingProviders.some((p) => p.id === endpoint.providerId)
           if (alreadyExists) {
@@ -55,7 +64,8 @@ const PrismAutoSetup: React.FC = () => {
             id: endpoint.providerId,
             type: 'openai',
             name: endpoint.name,
-            apiKey: 'no-key-required',
+            // 使用 gateway token（若无则 fallback 到 'no-key-required'）
+            apiKey: endpoint.apiKey ?? 'no-key-required',
             apiHost: endpoint.apiBase,
             models,
             enabled: true,
@@ -64,7 +74,9 @@ const PrismAutoSetup: React.FC = () => {
 
           dispatch(addProvider(provider))
           newCount++
-          logger.info(`[PRISM] Auto-registered provider: ${endpoint.name} (port ${endpoint.port}), ${models.length} models`)
+          logger.info(
+            `[PRISM] Auto-registered provider: ${endpoint.name} (port ${endpoint.port}), ${models.length} models, token=${endpoint.apiKey ? '✓' : '×'}`
+          )
         }
 
         // 有新 provider 时显示 toast 提示
