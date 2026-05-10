@@ -6037,5 +6037,10 @@
     "quit": "退出",
     "show_window": "显示窗口",
     "visualization": "可视化"
+  },
+  "prism": {
+    "autoDetect": {
+      "success": "✅ 已自动检测到 {{count}} 个本地 AI 服务，共 {{models}} 个模型已就绪"
+    }
   }
 }

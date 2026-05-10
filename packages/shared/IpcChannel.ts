@@ -450,5 +450,8 @@ export enum IpcChannel {
   OpenClaw_PerformUpdate = 'openclaw:perform-update',
 
   // Analytics
-  Analytics_TrackTokenUsage = 'analytics:track-token-usage'
+  Analytics_TrackTokenUsage = 'analytics:track-token-usage',
+
+  // [PRISM] 2026-05-10 — Sprint 1: Prism 专属 IPC 频道
+  Prism_DetectLocalAI = 'prism:detect-local-ai'
 }

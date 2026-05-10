@@ -835,6 +835,18 @@ const api = {
   },
   analytics: {
     trackTokenUsage: (data: TokenUsageData) => ipcRenderer.invoke(IpcChannel.Analytics_TrackTokenUsage, data)
+  },
+  // [PRISM] 2026-05-10 — Sprint 1: Prism 专属 API
+  prism: {
+    detectLocalAI: (): Promise<
+      Array<{
+        port: number
+        name: string
+        providerId: string
+        apiBase: string
+        models: Array<{ id: string; name: string }>
+      }>
+    > => ipcRenderer.invoke(IpcChannel.Prism_DetectLocalAI)
   }
 }
 

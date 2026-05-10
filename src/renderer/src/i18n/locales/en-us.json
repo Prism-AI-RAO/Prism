@@ -6037,5 +6037,10 @@
     "quit": "Quit",
     "show_window": "Show Window",
     "visualization": "Visualization"
+  },
+  "prism": {
+    "autoDetect": {
+      "success": "✅ Detected {{count}} local AI service(s) — {{models}} model(s) ready"
+    }
   }
 }
