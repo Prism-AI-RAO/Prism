@@ -4,11 +4,12 @@
 // [PRISM] 2026-05-10 Fix v2: 修复 existingProviders 在 deps 中导致 persist rehydrate 时
 //   cleanup 取消 timer（effect 只跑一次，用 ref 读取最新 providers 替代 closure）
 // [PRISM] 2026-05-10 Fix v4: 支持 providerType 字段（openai/anthropic），每个 endpoint 独立注册
+// [PRISM] 2026-05-10 Fix v4.1: 启动时清理旧的 prism-openclaw-{port} 聚合 provider（不再使用）
 // 无 UI 渲染（返回 null）。
 
 import { loggerService } from '@renderer/services/LoggerService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
-import { addProvider } from '@renderer/store/llm'
+import { addProvider, removeProvider } from '@renderer/store/llm'
 import { setGatewayPort, setGatewayStatus } from '@renderer/store/openclaw'
 import type { Model, Provider } from '@renderer/types'
 import { message } from 'antd'
@@ -46,6 +47,17 @@ const PrismAutoSetup: React.FC = () => {
 
         // 读取最新 providers（通过 ref，避免 stale closure）
         const currentProviders = existingProvidersRef.current
+
+        // [PRISM] Fix v4.1: 清理旧的聚合 provider（prism-openclaw-{port}，如 prism-openclaw-18789）
+        // v4 改为逐 provider 直连，旧的端口聚合 provider 不再有效，必须移除以避免 404 错误
+        const legacyProviders = currentProviders.filter(
+          (p) => /^prism-openclaw-\d+$/.test(p.id)
+        )
+        for (const legacy of legacyProviders) {
+          dispatch(removeProvider(legacy))
+          logger.info(`[PRISM] Removed legacy port-based provider: ${legacy.id} (replaced by per-provider direct connections)`)
+        }
+
         let newCount = 0
 
         for (const endpoint of detected) {
