@@ -121,7 +121,7 @@ app.get('/health', (_req, res) => {
  */
 app.get('/', (_req, res) => {
   res.json({
-    name: 'Prism API' // [PRISM] 2026-05-10,
+    name: 'Prism API', // [PRISM] 2026-05-10
     version: '1.0.0',
     endpoints: {
       health: 'GET /health',

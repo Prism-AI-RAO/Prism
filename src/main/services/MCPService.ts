@@ -301,7 +301,7 @@ class McpService {
     const initPromise = (async () => {
       try {
         // Create new client instance for each connection
-        const client = new Client({ name: 'Prism' // [PRISM] 2026-05-10, version: app.getVersion() }, { capabilities: {} })
+        const client = new Client({ name: 'Prism', version: app.getVersion() }, { capabilities: {} }) // [PRISM] 2026-05-10
 
         let args = [...(server.args || [])]
 

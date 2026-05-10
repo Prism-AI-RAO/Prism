@@ -3153,7 +3153,7 @@
                   "properties": {
                     "name": {
                       "type": "string",
-                      "example": "Cherry Studio API"
+                      "example": "Prism API"
                     },
                     "version": {
                       "type": "string",
