@@ -20,10 +20,6 @@ protocols:
       - prism
 files:
   - "**/*"
-  # [PRISM] 2026-05-12 — iconv-lite: 直接从 pnpm store 注入 asar，绕过 pnpm 依赖图检测
-  - from: "node_modules/.pnpm/iconv-lite@0.6.3/node_modules/iconv-lite"
-    to: "node_modules/iconv-lite"
-    filter: ["**/*"]
   - "!**/{.vscode,.yarn,.yarn-lock,.github,.cursorrules,.prettierrc}"
   - "!electron.vite.config.{js,ts,mjs,cjs}}"
   - "!.*"

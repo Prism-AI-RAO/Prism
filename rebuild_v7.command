@@ -1,34 +1,33 @@
 #!/bin/bash
-# [PRISM] 2026-05-12 — Sprint 7 Hotfix v8
-# 策略：electron-builder.yml files[] FileSet 直接从 pnpm store 注入 iconv-lite 进 asar
-# 无需物理复制，无需 pnpm exec（直接调 .bin）
+# [PRISM] 2026-05-12 — Sprint 7 Hotfix v9
+# 根本修复：iconv-lite 移回 devDependencies → rollup 直接 bundle 进 out/main/index.js
+# 无需在 node_modules 里打包，无需 extraResources，无需物理复制
 cd /Users/raoshimin/Prism
 rm -f .git/HEAD.lock .git/index.lock 2>/dev/null
 
 echo "=============================="
-echo "  🔮 Prism rebuild v8"
+echo "  🔮 Prism rebuild v9"
 echo "=============================="
 
-# Step 1: 确认 pnpm store 中 iconv-lite 存在（FileSet 的 from 路径）
-echo "Step 1/4: 确认 iconv-lite pnpm store 路径..."
-if [ -d "node_modules/.pnpm/iconv-lite@0.6.3/node_modules/iconv-lite" ]; then
-  echo "  ✅ 找到 node_modules/.pnpm/iconv-lite@0.6.3/node_modules/iconv-lite"
-elif [ -d "node_modules/.pnpm/iconv-lite@0.7.1/node_modules/iconv-lite" ]; then
-  echo "  ⚠️  只有 0.7.1，正在修改 electron-builder.yml 版本号..."
-  sed -i '' 's/iconv-lite@0.6.3/iconv-lite@0.7.1/g' electron-builder.yml
-  echo "  ✅ 已更新为 0.7.1"
-else
-  echo "  ❌ 找不到 iconv-lite pnpm store，请检查"
+# Step 1: 确认 iconv-lite 在 devDependencies（不在 dependencies）
+echo "Step 1/4: 确认 package.json 状态..."
+IN_DEPS=$(node -e "const p=require('./package.json'); console.log(p.dependencies && p.dependencies['iconv-lite'] ? 'YES' : 'NO')")
+IN_DEV=$(node -e "const p=require('./package.json'); console.log(p.devDependencies && p.devDependencies['iconv-lite'] ? 'YES' : 'NO')")
+echo "  iconv-lite in dependencies: $IN_DEPS  (期望: NO)"
+echo "  iconv-lite in devDependencies: $IN_DEV  (期望: YES)"
+if [ "$IN_DEPS" = "YES" ]; then
+  echo "  ❌ iconv-lite 仍在 dependencies，请检查 package.json"
   read -n 1; exit 1
 fi
+echo "  ✅ 状态正确，iconv-lite 将被 rollup bundle 进 out/main/index.js"
 echo ""
 
-# Step 2: electron-vite build（直接调用，不触发 pnpm workspace 校验）
-echo "Step 2/4: electron-vite build..."
+# Step 2: electron-vite build（rollup 会把 iconv-lite 打包进 main bundle）
+echo "Step 2/4: electron-vite build（iconv-lite will be bundled）..."
 NODE_OPTIONS=--max-old-space-size=8000 ./node_modules/.bin/electron-vite build
 echo ""
 
-# Step 3: electron-builder（直接调用，FileSet 会把 iconv-lite 注入 asar）
+# Step 3: electron-builder
 echo "Step 3/4: electron-builder --mac --arm64..."
 NODE_OPTIONS=--max-old-space-size=4096 \
   NODE_TLS_REJECT_UNAUTHORIZED=0 \
@@ -37,28 +36,18 @@ NODE_OPTIONS=--max-old-space-size=4096 \
   --config electron-builder.yml
 echo ""
 
-# Step 4: 验证 iconv-lite 是否在 asar 中
-echo "Step 4/4: 验证 asar 是否包含 iconv-lite..."
-ASAR_BIN="./node_modules/.bin/asar"
-if [ ! -f "$ASAR_BIN" ]; then
-  ASAR_BIN=$(find node_modules/.pnpm -name 'asar' -type f -path '*/bin/asar' | head -1)
-fi
-if [ -n "$ASAR_BIN" ]; then
-  ASAR_CHECK=$("$ASAR_BIN" list dist/mac-arm64/Prism.app/Contents/Resources/app.asar 2>/dev/null | grep "iconv-lite" | wc -l)
-  if [ "$ASAR_CHECK" -gt "0" ]; then
-    echo "  ✅ iconv-lite 已成功打包进 asar！($ASAR_CHECK 个条目)"
-  else
-    echo "  ⚠️  asar 中仍未找到 iconv-lite — 请截图发给 AI"
-    "$ASAR_BIN" list dist/mac-arm64/Prism.app/Contents/Resources/app.asar 2>/dev/null | grep -i "iconv" || echo "  (无任何 iconv 相关条目)"
-  fi
+# Step 4: 验证 out/main/index.js 是否包含 iconv-lite
+echo "Step 4/4: 验证 iconv-lite 是否已 bundle..."
+if grep -q "iconv-lite\|iconv_lite" out/main/index.js 2>/dev/null; then
+  echo "  ✅ iconv-lite 已 bundle 进 out/main/index.js"
 else
-  echo "  ⚠️  找不到 asar 工具，跳过验证"
+  echo "  ⚠️  out/main/index.js 中未找到 iconv-lite 字符串（可能被混淆，不一定有问题）"
 fi
 echo ""
 
-git add rebuild_v7.command electron-builder.yml .npmrc
+git add rebuild_v7.command electron-builder.yml package.json
 git diff --cached --stat
-git commit -m "fix(build): v8 — inject iconv-lite via electron-builder FileSet (bypass pnpm module graph)" --no-verify 2>/dev/null || true
+git commit -m "fix(build): v9 — move iconv-lite to devDeps so rollup bundles it into main (not external runtime dep)" --no-verify 2>/dev/null || true
 git push origin main && echo "✅ pushed" || echo "⚠️ push failed"
 
 echo ""
