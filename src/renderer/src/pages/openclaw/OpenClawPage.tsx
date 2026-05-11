@@ -15,10 +15,11 @@ import {
 } from '@renderer/store/openclaw'
 import { IpcChannel } from '@shared/IpcChannel'
 import { Alert, Avatar, Button, Result, Space, Spin } from 'antd'
-import { Download, ExternalLink, Play, Square } from 'lucide-react'
+import { BotMessageSquare, Download, ExternalLink, Play, Square } from 'lucide-react'
 import type { FC } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom' // [PRISM] 2026-05-11 — Sprint 5
 import useSWR from 'swr'
 
 import UpdateButton from './components/UpdateButton'
@@ -59,6 +60,7 @@ const TitleSection: FC<TitleSectionProps> = ({ title, description, clickable = f
 const OpenClawPage: FC = () => {
   const { t, i18n } = useTranslation()
   const dispatch = useAppDispatch()
+  const navigate = useNavigate() // [PRISM] 2026-05-11 — Sprint 5
   const { providers } = useProviders()
   const { openSmartMinapp } = useMinappPopup()
 
@@ -534,6 +536,17 @@ const OpenClawPage: FC = () => {
         {gatewayStatus === 'running' && (
           <Button type="primary" onClick={handleOpenDashboard} size="large" block>
             {t('openclaw.quick_actions.open_dashboard')}
+          </Button>
+        )}
+        {/* [PRISM] 2026-05-11 — Sprint 5: Multi-Agent 入口 */}
+        {gatewayStatus === 'running' && (
+          <Button
+            onClick={() => navigate('/sessions')}
+            size="large"
+            block
+            icon={<BotMessageSquare size={16} />}
+            style={{ marginTop: 8 }}>
+            🤖 Agent 会话
           </Button>
         )}
       </div>
