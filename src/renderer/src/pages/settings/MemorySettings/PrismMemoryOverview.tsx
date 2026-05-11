@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Badge, Button, Collapse, Spin, Tooltip } from 'antd'
-import { BrainCircuit, ChevronDown, Link, LinkOff, RefreshCw } from 'lucide-react'
+import { BrainCircuit, ChevronDown, Link, RefreshCw, Unlink } from 'lucide-react'
 import styled from 'styled-components'
 
 import { SettingGroup, SettingHelpText, SettingRow, SettingRowTitle } from '../index'
@@ -153,7 +153,8 @@ const PrismMemoryOverview: React.FC<Props> = ({ memoryCount, theme }) => {
             </Tooltip>
           ) : (
             <Tooltip title="Disconnect from OpenClaw gateway">
-              <Button size="small" icon={<LinkOff size={14} />} onClick={handleDisconnect} danger>
+              // [PRISM] 2026-05-11 — LinkOff not in this lucide-react version; use Unlink
+              <Button size="small" icon={<Unlink size={14} />} onClick={handleDisconnect} danger>
                 Disconnect
               </Button>
             </Tooltip>
