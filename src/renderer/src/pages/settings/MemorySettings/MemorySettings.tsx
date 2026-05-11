@@ -594,9 +594,9 @@ const MemorySettings = () => {
   const handleDreamingToggle = (enabled: boolean) => {
     dispatch(setPrismDreamingEnabled(enabled))
     if (enabled) {
-      window.toast.success('✨ Dreaming 已开启 — 对话结束后将自动提炼记忆', 3)
+      window.toast.success('✨ Dreaming 已开启 — 对话结束后将自动提炼记忆')
     } else {
-      window.toast.success('Dreaming 已关闭', 2)
+      window.toast.success('Dreaming 已关闭')
     }
   }
 

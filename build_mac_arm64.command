@@ -35,7 +35,11 @@ echo ""
 
 echo "📦 Step 2/3: electron-builder 打包 macOS arm64..."
 echo ""
-NODE_OPTIONS=--max-old-space-size=4096 pnpm exec electron-builder --mac --arm64 \
+# [PRISM] 2026-05-11 — 绕过企业/VPN SSL 拦截（node-gyp 下载 electron headers 时需要）
+NODE_OPTIONS=--max-old-space-size=4096 \
+  NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  npm_config_strict_ssl=false \
+  pnpm exec electron-builder --mac --arm64 \
   --config electron-builder.yml
 echo ""
 

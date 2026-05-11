@@ -8,7 +8,7 @@ import { Badge, Button, Collapse, Spin, Tooltip } from 'antd'
 import { BrainCircuit, ChevronDown, Link, RefreshCw, Unlink } from 'lucide-react'
 import styled from 'styled-components'
 
-import { SettingGroup, SettingHelpText, SettingRow, SettingRowTitle } from '../index'
+import { SettingGroup, SettingHelpText, SettingRow } from '../index'
 
 type BridgeStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -146,7 +146,7 @@ const PrismMemoryOverview: React.FC<Props> = ({ memoryCount, theme }) => {
               <Button
                 size="small"
                 icon={<Link size={14} />}
-                loading={connecting || bridgeStatus === 'connecting'}
+                loading={connecting || (bridgeStatus as string) === 'connecting'}
                 onClick={handleConnect}>
                 Connect
               </Button>
