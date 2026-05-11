@@ -884,7 +884,26 @@ const api = {
     > => ipcRenderer.invoke(IpcChannel.Prism_DetectLocalAI),
     // [PRISM] 2026-05-11 — Sprint 2-C: 读取内存文件（MEMORY.md 预览）
     readMemoryFile: (filePath: string): Promise<{ content: string | null; sizeBytes?: number; error: string | null }> =>
-      ipcRenderer.invoke(IpcChannel.Prism_ReadMemoryFile, filePath)
+      ipcRenderer.invoke(IpcChannel.Prism_ReadMemoryFile, filePath),
+    // [PRISM] 2026-05-11 — Sprint 3-B: PrismMemoryFileService API
+    memory: {
+      readContext: (): Promise<string | null> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Memory_ReadContext),
+      appendEntry: (content: string, tags?: string[]): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Memory_AppendEntry, content, tags),
+      writeMemoryMd: (content: string): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Memory_WriteMemoryMd, content),
+      readUserMd: (): Promise<{ content: string; isNew: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Memory_ReadUserMd),
+      writeUserMd: (content: string): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Memory_WriteUserMd, content),
+      getStats: (): Promise<{
+        fragmentCount: number
+        memorySizeBytes: number | null
+        userMdExists: boolean
+        userMdSizeBytes: number | null
+      }> => ipcRenderer.invoke(IpcChannel.Prism_Memory_GetStats)
+    }
   }
 }
 

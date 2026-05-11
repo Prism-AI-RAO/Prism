@@ -1,9 +1,15 @@
 // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成 — Prism Memory MCP Server
-// Wraps MemoryService (SQLite + vector search) and exposes Hermes-style memory tools
-// to any AI assistant running inside Prism. Design inspired by NousResearch/hermes-agent.
+// [PRISM] 2026-05-11 — Sprint 3-C: 添加 prism_memory_read_context + prism_memory_write_summary
+// Wraps MemoryService (SQLite + vector search) and PrismMemoryFileService (MEMORY.md/USER.md).
+// Exposes Hermes-style memory tools to any AI assistant running inside Prism.
 
 import { loggerService } from '@logger'
 import MemoryService from '@main/services/memory/MemoryService'
+import {
+  appendMemoryEntry,
+  readCombinedContext,
+  readUserMd
+} from '@main/services/PrismMemoryFileService'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js'
 
@@ -135,6 +141,45 @@ class PrismMemoryServer {
               }
             },
             required: ['confirm']
+          }
+        },
+        // ── prism_memory_read_context ─────────────────────────────────────
+        // [PRISM] 2026-05-11 — Sprint 3-C
+        {
+          name: 'prism_memory_read_context',
+          description:
+            'Read the combined memory context for this user: their self-written profile (USER.md) ' +
+            'and the AI-maintained memory log (MEMORY.md). ' +
+            'Call this at the START of each conversation to load personalized context before responding.',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        // ── prism_memory_write_summary ────────────────────────────────────
+        // [PRISM] 2026-05-11 — Sprint 3-C
+        {
+          name: 'prism_memory_write_summary',
+          description:
+            'Append a new memory entry to MEMORY.md — the AI-maintained log of what you have learned about the user. ' +
+            'Call this at the END of a conversation when you have learned something new and important about the user. ' +
+            'Write in third person, factual, concise. Examples: "User is building an AI desktop app called Prism." ' +
+            '"User prefers Chinese for casual conversation, English for code." ' +
+            '"User founded a dental clinic chain in Keqiao, Shaoxing."',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              content: {
+                type: 'string',
+                description: 'The memory content to append (1-3 sentences, factual, third-person)'
+              },
+              tags: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional tags to categorize this memory (e.g. ["project", "preference", "fact"])'
+              }
+            },
+            required: ['content']
           }
         }
       ]
@@ -275,6 +320,73 @@ class PrismMemoryServer {
 
             return {
               content: [{ type: 'text', text: JSON.stringify({ status: 'cleared', message: 'All memories deleted' }) }]
+            }
+          }
+
+          // ── prism_memory_read_context ──────────────────────────────────
+          // [PRISM] 2026-05-11 — Sprint 3-C
+          case 'prism_memory_read_context': {
+            const context = readCombinedContext()
+
+            if (!context) {
+              // Also try to ensure USER.md exists (creates template on first call)
+              readUserMd()
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'empty',
+                    message:
+                      'No memory context found yet. ' +
+                      'A USER.md template has been created at ~/.prism/memory/USER.md — ' +
+                      'the user can fill it in to give you instant context. ' +
+                      'Memories will be added automatically as conversations progress.'
+                  })
+                }]
+              }
+            }
+
+            logger.debug(`[prism_memory_read_context] Returning ${context.length} chars of context`)
+            return {
+              content: [{ type: 'text', text: context }]
+            }
+          }
+
+          // ── prism_memory_write_summary ─────────────────────────────────
+          // [PRISM] 2026-05-11 — Sprint 3-C
+          case 'prism_memory_write_summary': {
+            const content = args.content as string
+            const tags = Array.isArray(args.tags) ? (args.tags as string[]) : undefined
+
+            if (!content || typeof content !== 'string') {
+              throw new McpError(ErrorCode.InvalidParams, "'content' must be a non-empty string")
+            }
+
+            // Write to MEMORY.md file (human-readable layer)
+            appendMemoryEntry(content.trim(), tags)
+
+            // Also add to SQLite vector store (structured search layer)
+            const category = tags?.[0] ?? 'fact'
+            try {
+              await this.memoryService.add(content.trim(), {
+                userId: PRISM_DEFAULT_USER,
+                metadata: { category, source: 'prism-summary', tags: tags?.join(',') }
+              })
+            } catch (e) {
+              // SQLite add failure is non-fatal — file write already succeeded
+              logger.warn(`[prism_memory_write_summary] SQLite add failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`)
+            }
+
+            logger.info(`[prism_memory_write_summary] Appended memory: "${content.slice(0, 60)}..."`)
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'written',
+                  message: 'Memory saved to MEMORY.md and vector store.',
+                  preview: content.slice(0, 120)
+                })
+              }]
             }
           }
 

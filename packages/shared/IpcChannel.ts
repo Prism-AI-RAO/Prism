@@ -466,5 +466,12 @@ export enum IpcChannel {
   // [PRISM] 2026-05-10 — Sprint 1: Prism 专属 IPC 频道
   Prism_DetectLocalAI = 'prism:detect-local-ai',
   // [PRISM] 2026-05-11 — Sprint 2-C: 安全读取内存文件（MEMORY.md 预览）
-  Prism_ReadMemoryFile = 'prism:read-memory-file'
+  Prism_ReadMemoryFile = 'prism:read-memory-file',
+  // [PRISM] 2026-05-11 — Sprint 3-B: PrismMemoryFileService IPC 频道
+  Prism_Memory_ReadContext = 'prism:memory:read-context',
+  Prism_Memory_AppendEntry = 'prism:memory:append-entry',
+  Prism_Memory_WriteMemoryMd = 'prism:memory:write-memory-md',
+  Prism_Memory_ReadUserMd = 'prism:memory:read-user-md',
+  Prism_Memory_WriteUserMd = 'prism:memory:write-user-md',
+  Prism_Memory_GetStats = 'prism:memory:get-stats'
 }

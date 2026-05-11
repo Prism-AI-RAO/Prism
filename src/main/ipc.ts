@@ -67,6 +67,7 @@ import { ocrService } from './services/ocr/OcrService'
 import { openClawService } from './services/OpenClawService'
 import { prismOpenClawBridge } from './services/PrismOpenClawBridge' // [PRISM] 2026-05-11
 import * as prismAutoSetupService from './services/PrismAutoSetupService' // [PRISM] 2026-05-10
+import * as prismMemoryFileService from './services/PrismMemoryFileService' // [PRISM] 2026-05-11 Sprint 3-B
 import { isOvmsSupported } from './services/OvmsManager'
 import powerMonitorService from './services/PowerMonitorService'
 import { proxyManager } from './services/ProxyManager'
@@ -1215,6 +1216,29 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
     } catch (err) {
       return { content: null, error: (err as Error).message }
     }
+  })
+
+  // [PRISM] 2026-05-11 — Sprint 3-B: PrismMemoryFileService IPC handlers
+  ipcMain.handle(IpcChannel.Prism_Memory_ReadContext, () => {
+    return prismMemoryFileService.readCombinedContext()
+  })
+  ipcMain.handle(IpcChannel.Prism_Memory_AppendEntry, (_event, content: string, tags?: string[]) => {
+    prismMemoryFileService.appendMemoryEntry(content, tags)
+    return { ok: true }
+  })
+  ipcMain.handle(IpcChannel.Prism_Memory_WriteMemoryMd, (_event, content: string) => {
+    prismMemoryFileService.writeMemoryMd(content)
+    return { ok: true }
+  })
+  ipcMain.handle(IpcChannel.Prism_Memory_ReadUserMd, () => {
+    return prismMemoryFileService.readUserMd()
+  })
+  ipcMain.handle(IpcChannel.Prism_Memory_WriteUserMd, (_event, content: string) => {
+    prismMemoryFileService.writeUserMd(content)
+    return { ok: true }
+  })
+  ipcMain.handle(IpcChannel.Prism_Memory_GetStats, () => {
+    return prismMemoryFileService.getMemoryFileStats()
   })
 
   // WeChat

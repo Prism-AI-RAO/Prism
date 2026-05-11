@@ -29,6 +29,7 @@ import mcpService from './services/MCPService'
 import { localTransferService } from './services/LocalTransferService'
 import { openClawService } from './services/OpenClawService'
 import { prismOpenClawBridge } from './services/PrismOpenClawBridge' // [PRISM] 2026-05-11
+import { tryAutoConfigEmbedding } from './services/PrismMemoryAutoConfig' // [PRISM] 2026-05-11 Sprint 3-A
 import { nodeTraceService } from './services/NodeTraceService'
 import powerMonitorService from './services/PowerMonitorService'
 import {
@@ -209,6 +210,10 @@ if (!app.requestSingleInstanceLock()) {
       // [PRISM] 2026-05-11 — Sprint 2-B: Try to connect to OpenClaw WebSocket bridge
       // Non-blocking: if OpenClaw is not running, this silently skips
       void prismOpenClawBridge.tryAutoConnect()
+
+      // [PRISM] 2026-05-11 — Sprint 3-A: Auto-configure vector embedding from OpenClaw providers
+      // Non-blocking: enables semantic memory search without user configuration
+      void tryAutoConfigEmbedding()
 
       // Initialize built-in skills and agents (sequential to avoid SQLITE_BUSY)
       // TODO: v2 lifecycle
