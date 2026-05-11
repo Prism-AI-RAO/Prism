@@ -448,10 +448,23 @@ export enum IpcChannel {
   OpenClaw_GetChannels = 'openclaw:get-channels',
   OpenClaw_CheckUpdate = 'openclaw:check-update',
   OpenClaw_PerformUpdate = 'openclaw:perform-update',
+  // [PRISM] 2026-05-11 — Sprint 2-B: WebSocket bridge IPC channels
+  OpenClaw_Bridge_Connect = 'openclaw:bridge:connect',
+  OpenClaw_Bridge_Disconnect = 'openclaw:bridge:disconnect',
+  OpenClaw_Bridge_GetStatus = 'openclaw:bridge:get-status',
+  OpenClaw_Bridge_SessionsSpawn = 'openclaw:bridge:sessions-spawn',
+  OpenClaw_Bridge_SessionsYield = 'openclaw:bridge:sessions-yield',
+  OpenClaw_Bridge_SessionsHistory = 'openclaw:bridge:sessions-history',
+  OpenClaw_Bridge_MemorySearch = 'openclaw:bridge:memory-search',
+  OpenClaw_Bridge_MemoryWrite = 'openclaw:bridge:memory-write',
+  OpenClaw_Bridge_MemoryRead = 'openclaw:bridge:memory-read',
+  OpenClaw_Bridge_StatusChanged = 'openclaw:bridge:status-changed',
 
   // Analytics
   Analytics_TrackTokenUsage = 'analytics:track-token-usage',
 
   // [PRISM] 2026-05-10 — Sprint 1: Prism 专属 IPC 频道
-  Prism_DetectLocalAI = 'prism:detect-local-ai'
+  Prism_DetectLocalAI = 'prism:detect-local-ai',
+  // [PRISM] 2026-05-11 — Sprint 2-C: 安全读取内存文件（MEMORY.md 预览）
+  Prism_ReadMemoryFile = 'prism:read-memory-file'
 }

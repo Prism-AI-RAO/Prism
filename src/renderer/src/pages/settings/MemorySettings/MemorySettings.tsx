@@ -35,6 +35,7 @@ import {
 } from '../index'
 import { DEFAULT_USER_ID } from './constants'
 import MemorySettingsModal from './MemorySettingsModal'
+import PrismMemoryOverview from './PrismMemoryOverview' // [PRISM] 2026-05-11 — Sprint 2-C
 import UserSelector from './UserSelector'
 
 const logger = loggerService.withContext('MemorySettings')
@@ -589,6 +590,9 @@ const MemorySettings = () => {
 
   return (
     <SettingContainer theme={theme}>
+      {/* [PRISM] 2026-05-11 — Sprint 2-C: Prism Memory Engine overview card */}
+      <PrismMemoryOverview memoryCount={allMemories.length} theme={theme} />
+
       {/* Memory Settings */}
       <SettingGroup style={{ justifyContent: 'space-between', alignItems: 'center' }} theme={theme}>
         <HStack style={{ justifyContent: 'space-between', alignItems: 'center' }}>

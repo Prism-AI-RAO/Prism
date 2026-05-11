@@ -831,7 +831,39 @@ const api = {
       latestVersion: string | null
       message?: string
     }> => ipcRenderer.invoke(IpcChannel.OpenClaw_CheckUpdate),
-    performUpdate: (): Promise<OperationResult> => ipcRenderer.invoke(IpcChannel.OpenClaw_PerformUpdate)
+    performUpdate: (): Promise<OperationResult> => ipcRenderer.invoke(IpcChannel.OpenClaw_PerformUpdate),
+    // [PRISM] 2026-05-11 — Sprint 2-B: WebSocket bridge API
+    bridge: {
+      connect: (): Promise<{ success: boolean; message?: string }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_Connect),
+      disconnect: (): Promise<{ success: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_Disconnect),
+      getStatus: (): Promise<{ status: string }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_GetStatus),
+      sessionsSpawn: (agentId: string, prompt?: string): Promise<{ session_id: string }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_SessionsSpawn, { agentId, prompt }),
+      sessionsYield: (sessionId: string, message: string): Promise<{ done: boolean }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_SessionsYield, { sessionId, message }),
+      sessionsHistory: (sessionId: string): Promise<{ messages: Array<{ role: string; content: string; ts: string }> }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_SessionsHistory, { sessionId }),
+      memorySearch: (query: string, limit?: number): Promise<{ results: Array<{ id: string; content: string; score: number }> }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_MemorySearch, { query, limit }),
+      memoryWrite: (content: string, tags?: string[]): Promise<{ id: string }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_MemoryWrite, { content, tags }),
+      memoryRead: (id: string): Promise<{ id: string; content: string; tags: string[]; ts: string }> =>
+        ipcRenderer.invoke(IpcChannel.OpenClaw_Bridge_MemoryRead, { id }),
+      onStatusChanged: (callback: (status: string) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, data: { status: string }) => callback(data.status)
+        ipcRenderer.on(IpcChannel.OpenClaw_Bridge_StatusChanged, handler)
+        return () => ipcRenderer.off(IpcChannel.OpenClaw_Bridge_StatusChanged, handler)
+      },
+      onYieldDelta: (callback: (data: { sessionId: string; delta: string; done: boolean }) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; delta: string; done: boolean }) =>
+          callback(data)
+        ipcRenderer.on(IpcChannel.OpenClaw_Bridge_SessionsYield, handler)
+        return () => ipcRenderer.off(IpcChannel.OpenClaw_Bridge_SessionsYield, handler)
+      }
+    }
   },
   analytics: {
     trackTokenUsage: (data: TokenUsageData) => ipcRenderer.invoke(IpcChannel.Analytics_TrackTokenUsage, data)
@@ -849,7 +881,10 @@ const api = {
         /** Gateway auth token (e.g. OpenClaw requires Bearer token) */
         apiKey?: string
       }>
-    > => ipcRenderer.invoke(IpcChannel.Prism_DetectLocalAI)
+    > => ipcRenderer.invoke(IpcChannel.Prism_DetectLocalAI),
+    // [PRISM] 2026-05-11 — Sprint 2-C: 读取内存文件（MEMORY.md 预览）
+    readMemoryFile: (filePath: string): Promise<{ content: string | null; sizeBytes?: number; error: string | null }> =>
+      ipcRenderer.invoke(IpcChannel.Prism_ReadMemoryFile, filePath)
   }
 }
 

@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { arch } from 'node:os'
+import { arch, homedir as osHomedir } from 'node:os'
 import path from 'node:path'
 
 import type { TokenUsageData } from '@cherrystudio/analytics-client'
@@ -65,6 +65,7 @@ import * as NutstoreService from './services/NutstoreService'
 import ObsidianVaultService from './services/ObsidianVaultService'
 import { ocrService } from './services/ocr/OcrService'
 import { openClawService } from './services/OpenClawService'
+import { prismOpenClawBridge } from './services/PrismOpenClawBridge' // [PRISM] 2026-05-11
 import * as prismAutoSetupService from './services/PrismAutoSetupService' // [PRISM] 2026-05-10
 import { isOvmsSupported } from './services/OvmsManager'
 import powerMonitorService from './services/PowerMonitorService'
@@ -1184,9 +1185,36 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
   ipcMain.handle(IpcChannel.OpenClaw_CheckUpdate, openClawService.checkUpdate)
   ipcMain.handle(IpcChannel.OpenClaw_PerformUpdate, openClawService.performUpdate)
 
+  // [PRISM] 2026-05-11 — Sprint 2-B: WebSocket bridge IPC handlers
+  prismOpenClawBridge.registerIpcHandlers()
+
   // [PRISM] 2026-05-10 — Sprint 1: 本地 AI 服务自动检测
   ipcMain.handle(IpcChannel.Prism_DetectLocalAI, async () => {
     return await prismAutoSetupService.detectLocalAIServices()
+  })
+
+  // [PRISM] 2026-05-11 — Sprint 2-C: 安全读取内存文件（仅限 ~/.openclaw/workspace/ 和 ~/Documents/Prism/）
+  ipcMain.handle(IpcChannel.Prism_ReadMemoryFile, async (_event, filePath: string) => {
+    const ALLOWED_DIRS = [
+      path.join(osHomedir(), '.openclaw', 'workspace'),
+      path.join(osHomedir(), 'Documents', 'Prism', 'memory'),
+      path.join(osHomedir(), 'Downloads', 'My Workspace', 'Claue Cowork Project', 'Prism', 'memory')
+    ]
+    const resolved = path.resolve(filePath)
+    const allowed = ALLOWED_DIRS.some((dir) => resolved.startsWith(dir))
+    if (!allowed) {
+      return { content: null, error: 'Path not allowed' }
+    }
+    try {
+      if (!fs.existsSync(resolved)) {
+        return { content: null, error: 'File not found' }
+      }
+      const content = fs.readFileSync(resolved, 'utf-8')
+      const sizeBytes = fs.statSync(resolved).size
+      return { content, sizeBytes, error: null }
+    } catch (err) {
+      return { content: null, error: (err as Error).message }
+    }
   })
 
   // WeChat

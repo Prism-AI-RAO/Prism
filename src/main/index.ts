@@ -28,6 +28,7 @@ import { lanTransferClientService } from './services/lanTransfer'
 import mcpService from './services/MCPService'
 import { localTransferService } from './services/LocalTransferService'
 import { openClawService } from './services/OpenClawService'
+import { prismOpenClawBridge } from './services/PrismOpenClawBridge' // [PRISM] 2026-05-11
 import { nodeTraceService } from './services/NodeTraceService'
 import powerMonitorService from './services/PowerMonitorService'
 import {
@@ -205,6 +206,10 @@ if (!app.requestSingleInstanceLock()) {
     initSelectionService()
 
     void runAsyncFunction(async () => {
+      // [PRISM] 2026-05-11 — Sprint 2-B: Try to connect to OpenClaw WebSocket bridge
+      // Non-blocking: if OpenClaw is not running, this silently skips
+      void prismOpenClawBridge.tryAutoConnect()
+
       // Initialize built-in skills and agents (sequential to avoid SQLITE_BUSY)
       // TODO: v2 lifecycle
       await bootstrapBuiltinAgents()
