@@ -20,6 +20,10 @@ protocols:
       - prism
 files:
   - "**/*"
+  # [PRISM] 2026-05-12 — iconv-lite: 直接从 pnpm store 注入 asar，绕过 pnpm 依赖图检测
+  - from: "node_modules/.pnpm/iconv-lite@0.6.3/node_modules/iconv-lite"
+    to: "node_modules/iconv-lite"
+    filter: ["**/*"]
   - "!**/{.vscode,.yarn,.yarn-lock,.github,.cursorrules,.prettierrc}"
   - "!electron.vite.config.{js,ts,mjs,cjs}}"
   - "!.*"
@@ -79,12 +83,6 @@ asarUnpack:
 # [PRISM] 2026-05-11 — 禁止 electron-builder 触发 pnpm install（避免 xlsx exotic dep 阻断）
 npmRebuild: false
 
-# [PRISM] 2026-05-11 — iconv-lite fix: pnpm symlink 不被 electron-builder 打包
-# 直接从 pnpm virtual store 复制真实文件到 app.asar.unpacked/node_modules/iconv-lite
-# Electron ASAR 模块解析会在 asar 找不到时自动查找 app.asar.unpacked
-extraResources:
-  - from: "node_modules/.pnpm/iconv-lite@0.6.3/node_modules/iconv-lite"
-    to: "app.asar.unpacked/node_modules/iconv-lite"
 
 # [PRISM] 2026-05-11 — Sprint 7: rename win executable
 win:
