@@ -76,8 +76,9 @@ asarUnpack:
   - "**/*.{metal,exp,lib}"
   - "node_modules/@img/sharp-*/**"
 
+# [PRISM] 2026-05-11 — Sprint 7: rename win executable
 win:
-  executableName: Cherry Studio
+  executableName: Prism
   artifactName: ${productName}-${version}-${arch}-setup.${ext}
   target:
     - target: nsis
@@ -131,50 +132,38 @@ rpm:
   # Workaround for electron build issue on rpm package:
   # https://github.com/electron/forge/issues/3594
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
+# [PRISM] 2026-05-11 — Sprint 7: placeholder publish URL
 publish:
   provider: generic
-  url: https://releases.cherry-ai.com
+  url: https://releases.prism-ai.app
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/before-pack.js
 afterPack: scripts/after-pack.js
 afterSign: scripts/notarize.js
 artifactBuildCompleted: scripts/artifact-build-completed.js
+# [PRISM] 2026-05-11 — Sprint 7: Prism release notes
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 1.9.4 - Bug Fixes & Model Support
+    Prism 0.1.0 - First Public Beta
 
-    🐛 Bug Fixes
-    - [OpenCode] NEWAPI provider models now appear in the dropdown and route correctly
-    - [Image Generation] Fixed gpt-image-2/gpt-image-1.5 editing and generation across multiple providers
-    - [Models] Fixed Kimi K2.6 requests being rejected due to unsupported temperature settings
-    - [Gateway] Fixed Vercel AI Gateway model list fetch failing due to missing authentication
-    - [Copilot] Fixed GitHub Copilot model synchronization
-
-    ✨ New Features
-    - [Models] Added MiMo V2.5 model support with reasoning and calling capabilities
-    - [Models] Added DeepSeek V4+ model support with reasoning effort control (high/max)
-    - [Models] Mistral Small 4 now supports vision and adjustable reasoning effort
-
-    💄 Improvements
-    - [Agents] Removed auto-injected @cherry/browser MCP (re-enable manually if needed)
+    ✨ Features
+    - Local-first AI productivity platform
+    - Zero-config setup — auto-detects OpenClaw and local AI providers
+    - OpenClaw Bridge: persistent memory via Ed25519-authenticated WebSocket
+    - Dreaming: post-conversation memory synthesis
+    - Multi-Agent: spawn parallel AI sessions
+    - Built on Cherry Studio (AGPL-3.0)
 
     <!--LANG:zh-CN-->
-    Cherry Studio 1.9.4 - 错误修复与模型支持
+    Prism 0.1.0 - 首个公测版本
 
-    🐛 问题修复
-    - [OpenCode] NEWAPI 服务商模型现在显示在列表中并正确路由
-    - [图像生成] 修复多个服务商的 gpt-image-2/gpt-image-1.5 编辑和生成问题
-    - [模型] 修复 Kimi K2.6 因不支持的温度设置导致请求失败
-    - [网关] 修复 Vercel AI Gateway 模型列表获取因缺少认证而失败
-    - [Copilot] 修复 GitHub Copilot 模型同步问题
-
-    ✨ 新功能
-    - [模型] 添加 MiMo V2.5 模型支持，包含推理和调用能力
-    - [模型] 添加 DeepSeek V4+ 模型支持，支持推理强度控制 (high/max)
-    - [模型] Mistral Small 4 现在支持视觉和可调节推理强度
-
-    💄 改进
-    - [智能体] 移除自动注入的 @cherry/browser MCP（如需要请手动重新启用）
+    ✨ 功能
+    - 本地优先 AI 生产力平台
+    - 零配置，自动检测 OpenClaw 和本地 AI 服务
+    - OpenClaw Bridge：Ed25519 认证 WebSocket 长期记忆
+    - Dreaming：对话后自动记忆合成
+    - Multi-Agent：并行 AI 会话管理
+    - 基于 Cherry Studio (AGPL-3.0)
     <!--LANG:END-->
