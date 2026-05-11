@@ -32,7 +32,7 @@
 //
 //   Credential: ~/.openclaw/openclaw.json → gateway.auth.token
 
-import crypto from 'node:crypto'
+import crypto, { generateKeyPairSync } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -54,11 +54,15 @@ const REQUEST_TIMEOUT_MS = 30_000
 const KEEPALIVE_INTERVAL_MS = 30_000
 
 const OPENCLAW_CONFIG_PATH = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+const OPENCLAW_IDENTITY_DIR = path.join(os.homedir(), '.openclaw', 'identity')
+const PRISM_DEVICE_PATH = path.join(os.homedir(), '.prism', 'openclaw-device.json')
 
 const CLIENT_ID = 'openclaw-control-ui'
 const CLIENT_MODE = 'webchat'
 const CLIENT_ROLE = 'operator'
-const DEFAULT_SCOPES = ['tool:all', 'memory:read', 'memory:write', 'sessions:read', 'sessions:write']
+// [PRISM] 2026-05-11 — Sprint 6-C: operator role requires operator.* scopes
+// memory:read / tool:all etc. are invalid for the operator role in OpenClaw
+const DEFAULT_SCOPES = ['operator.admin', 'operator.read', 'operator.write', 'operator.approvals', 'operator.pairing']
 const PROTOCOL_VERSION = 3
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -70,6 +74,17 @@ interface OpenClawConfig {
     port?: number
     auth?: { token?: string }
   }
+}
+
+/** Device identity — stored on disk, reused across sessions. */
+interface DeviceIdentity {
+  version: number
+  deviceId: string
+  publicKey: string  // base64url raw 32-byte Ed25519 public key
+  privateKey: string // base64url raw 32-byte Ed25519 private key
+  token: string      // device-specific operator auth token (may differ from gateway token)
+  scopes: string[]
+  createdAtMs: number
 }
 
 /** Pending request waiting for a 'res' frame. */
@@ -86,6 +101,36 @@ interface YieldListeners {
   onError: (err: Error) => void
 }
 
+// ── Ed25519 helpers ───────────────────────────────────────────────────────────
+
+function importEd25519PrivKey(base64urlPriv: string, base64urlPub: string): crypto.KeyObject {
+  const privRaw = Buffer.from(base64urlPriv, 'base64url')
+  const pkcs8Header = Buffer.from('302e020100300506032b657004220420', 'hex')
+  const pkcs8Der = Buffer.concat([pkcs8Header, privRaw])
+  try {
+    return crypto.createPrivateKey({ key: pkcs8Der, format: 'der', type: 'pkcs8' })
+  } catch {
+    return crypto.createPrivateKey({
+      key: { kty: 'OKP', crv: 'Ed25519', d: base64urlPriv, x: base64urlPub },
+      format: 'jwk'
+    })
+  }
+}
+
+function ed25519Sign(payload: string, privKeyObj: crypto.KeyObject): string {
+  return crypto.sign(null, Buffer.from(payload, 'utf8'), privKeyObj).toString('base64url')
+}
+
+function generateDeviceKeyPair(): { publicKey: string; privateKey: string } {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+  const privDer = privateKey.export({ type: 'pkcs8', format: 'der' }) as Buffer
+  const pubDer = publicKey.export({ type: 'spki', format: 'der' }) as Buffer
+  return {
+    privateKey: privDer.subarray(16).toString('base64url'),
+    publicKey: pubDer.subarray(12).toString('base64url')
+  }
+}
+
 // ── Credential loading ────────────────────────────────────────────────────────
 
 function loadGatewayToken(): string | undefined {
@@ -96,6 +141,100 @@ function loadGatewayToken(): string | undefined {
   } catch {
     return undefined
   }
+}
+
+// [PRISM] 2026-05-11 — Sprint 6-C fix: convert PEM keys to raw base64url (device.json uses PEM)
+function pemToRawBase64url(privPem: string, pubPem: string): { privateKey: string; publicKey: string } | undefined {
+  try {
+    const privKeyObj = crypto.createPrivateKey(privPem)
+    const privDer = privKeyObj.export({ type: 'pkcs8', format: 'der' }) as Buffer
+    const privRaw = privDer.subarray(16).toString('base64url')
+
+    const pubKeyObj = crypto.createPublicKey(pubPem)
+    const pubDer = pubKeyObj.export({ type: 'spki', format: 'der' }) as Buffer
+    const pubRaw = pubDer.subarray(12).toString('base64url')
+
+    return { privateKey: privRaw, publicKey: pubRaw }
+  } catch {
+    return undefined
+  }
+}
+
+function loadOpenClawIdentity(): DeviceIdentity | undefined {
+  try {
+    if (!fs.existsSync(OPENCLAW_IDENTITY_DIR)) return undefined
+    const files = fs.readdirSync(OPENCLAW_IDENTITY_DIR).filter((f) => f.endsWith('.json'))
+    for (const file of files) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(path.join(OPENCLAW_IDENTITY_DIR, file), 'utf8'))
+        // Case 1: raw base64url keys (Prism-generated format)
+        if (parsed.privateKey && parsed.publicKey && parsed.deviceId) {
+          logger.info(`[PRISM] PrismOpenClawBridge: loaded identity from ${file} (raw keys)`)
+          return {
+            version: 1,
+            deviceId: parsed.deviceId,
+            publicKey: parsed.publicKey,
+            privateKey: parsed.privateKey,
+            token: parsed.token ?? '',
+            scopes: parsed.scopes ?? DEFAULT_SCOPES,
+            createdAtMs: parsed.createdAtMs ?? Date.now()
+          }
+        }
+        // [PRISM] 2026-05-11 — Case 2: PEM keys (OpenClaw device.json format)
+        if (parsed.privateKeyPem && parsed.publicKeyPem && parsed.deviceId) {
+          const raw = pemToRawBase64url(parsed.privateKeyPem, parsed.publicKeyPem)
+          if (raw) {
+            logger.info(`[PRISM] PrismOpenClawBridge: loaded identity from ${file} (PEM→raw, deviceId=${parsed.deviceId.slice(0, 8)}…)`)
+            return {
+              version: 1,
+              deviceId: parsed.deviceId,
+              publicKey: raw.publicKey,
+              privateKey: raw.privateKey,
+              token: parsed.token ?? '',
+              scopes: parsed.scopes ?? DEFAULT_SCOPES,
+              createdAtMs: parsed.createdAtMs ?? Date.now()
+            }
+          }
+        }
+      } catch { /* skip malformed */ }
+    }
+  } catch { /* dir unreadable */ }
+  return undefined
+}
+
+function loadPrismIdentity(): DeviceIdentity | undefined {
+  try {
+    if (!fs.existsSync(PRISM_DEVICE_PATH)) return undefined
+    return JSON.parse(fs.readFileSync(PRISM_DEVICE_PATH, 'utf8')) as DeviceIdentity
+  } catch {
+    return undefined
+  }
+}
+
+function generateAndSavePrismIdentity(): DeviceIdentity {
+  const { privateKey, publicKey } = generateDeviceKeyPair()
+  const identity: DeviceIdentity = {
+    version: 1,
+    deviceId: crypto.randomUUID(),
+    publicKey,
+    privateKey,
+    token: '',
+    scopes: DEFAULT_SCOPES,
+    createdAtMs: Date.now()
+  }
+  try {
+    const dir = path.dirname(PRISM_DEVICE_PATH)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(PRISM_DEVICE_PATH, JSON.stringify(identity, null, 2), 'utf8')
+    logger.info('[PRISM] PrismOpenClawBridge: generated new device identity → ~/.prism/openclaw-device.json')
+  } catch (err) {
+    logger.warn('[PRISM] PrismOpenClawBridge: could not save device identity', err as Error)
+  }
+  return identity
+}
+
+function getOrCreateIdentity(): DeviceIdentity {
+  return loadOpenClawIdentity() ?? loadPrismIdentity() ?? generateAndSavePrismIdentity()
 }
 
 // ── Bridge class ──────────────────────────────────────────────────────────────
@@ -267,31 +406,46 @@ class PrismOpenClawBridge {
 
   // ── Auth: challenge-response ────────────────────────────────────────────────
 
-  // [PRISM] 2026-05-11 — Sprint 6-C: Gateway token auth (replaces device Ed25519 auth)
+  // [PRISM] 2026-05-11 — Sprint 6-C v3: Full device auth with gateway token in signing payload
   //
-  // Root cause of "pairing required: metadata-upgrade" error:
-  //   Device auth requires OpenClaw to have a matching publicKey for the deviceId in its DB.
-  //   Any key mismatch (or new device) triggers a pairing approval flow that blocks connection.
+  // OpenClaw WS schema REQUIRES the device object with all 5 fields (id, publicKey,
+  // signature, signedAt, nonce) — device: null or {} are both rejected.
   //
-  // Fix: mirror exactly how the browser Control UI authenticates — it uses the GATEWAY TOKEN
-  //   (a master operator credential stored in localStorage.openclaw.control.settings.v1.gatewayToken
-  //   and also in ~/.openclaw/openclaw.json → gateway.auth.token) with device: null.
-  //   This bypasses device pairing entirely and is the intended path for trusted local clients.
-  //
-  // The `nonce` parameter is retained in the signature for future use (e.g. if OpenClaw
-  // adds nonce validation to gateway token auth), but is not included in connect params.
-  private async sendConnectResponse(_nonce: string, _challengeTs: number): Promise<void> {
+  // Key insight: the signing payload includes `token`. The browser Control UI signs using
+  // the GATEWAY TOKEN, not the device-specific token. Using the gateway token in both
+  // the signing payload and auth.token should allow OpenClaw to accept the connection
+  // without triggering the "metadata-upgrade" pairing check.
+  private async sendConnectResponse(nonce: string, _challengeTs: number): Promise<void> {
     const gatewayToken = loadGatewayToken()
-
     if (!gatewayToken) {
       throw new Error(
-        'No OpenClaw gateway token found. ' +
-        'Expected at ~/.openclaw/openclaw.json → gateway.auth.token. ' +
-        'Sign in to OpenClaw at http://127.0.0.1:18789 to generate one.'
+        'No OpenClaw gateway token found at ~/.openclaw/openclaw.json → gateway.auth.token. ' +
+        'Sign in to OpenClaw at http://127.0.0.1:18789 first.'
       )
     }
 
-    logger.info('[PRISM] PrismOpenClawBridge: sending connect with gateway token (device: null)')
+    const identity = getOrCreateIdentity()
+    const signedAtMs = Date.now()
+    const scopesStr = DEFAULT_SCOPES.join(',')
+
+    // [PRISM] 2026-05-11 — Use gateway token (not identity.token) in signing payload.
+    // The browser Control UI uses gateway token here; device token causes metadata-upgrade.
+    const signingPayload = [
+      'v2',
+      identity.deviceId,
+      CLIENT_ID,
+      CLIENT_MODE,
+      CLIENT_ROLE,
+      scopesStr,
+      String(signedAtMs),
+      gatewayToken,   // ← gateway token, not identity.token
+      nonce
+    ].join('|')
+
+    const privKeyObj = importEd25519PrivKey(identity.privateKey, identity.publicKey)
+    const signature = ed25519Sign(signingPayload, privKeyObj)
+
+    logger.info(`[PRISM] PrismOpenClawBridge: sending connect (deviceId: ${identity.deviceId.slice(0, 8)}...)`)
 
     await this.sendRequest('connect', {
       minProtocol: PROTOCOL_VERSION,
@@ -305,7 +459,13 @@ class PrismOpenClawBridge {
       },
       role: CLIENT_ROLE,
       scopes: DEFAULT_SCOPES,
-      device: null,
+      device: {
+        id: identity.deviceId,
+        publicKey: identity.publicKey,
+        signature,
+        signedAt: signedAtMs,
+        nonce
+      },
       caps: ['tool-events'],
       auth: { token: gatewayToken },
       userAgent: `Prism/1.0 Electron/${process.versions.electron ?? 'unknown'}`,
