@@ -76,6 +76,9 @@ asarUnpack:
   - "**/*.{metal,exp,lib}"
   - "node_modules/@img/sharp-*/**"
 
+# [PRISM] 2026-05-11 — 禁止 electron-builder 触发 pnpm install（避免 xlsx exotic dep 阻断）
+npmRebuild: false
+
 # [PRISM] 2026-05-11 — iconv-lite fix: pnpm symlink 不被 electron-builder 打包
 # 直接从 pnpm virtual store 复制真实文件到 app.asar.unpacked/node_modules/iconv-lite
 # Electron ASAR 模块解析会在 asar 找不到时自动查找 app.asar.unpacked
