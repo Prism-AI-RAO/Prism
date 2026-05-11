@@ -29,6 +29,9 @@ export interface MemoryState {
   currentUserId: string
   /** Global memory enabled state - when false, memory is disabled for all assistants */
   globalMemoryEnabled: boolean
+  // [PRISM] 2026-05-11 — Sprint 4: Dreaming — post-conversation background memory synthesis
+  /** Whether Prism Dreaming (auto memory extraction after each conversation) is enabled */
+  prismDreamingEnabled: boolean
 }
 
 // Default memory configuration to avoid undefined errors
@@ -45,7 +48,9 @@ const defaultMemoryConfig: MemoryConfig = {
 export const initialState: MemoryState = {
   memoryConfig: defaultMemoryConfig,
   currentUserId: localStorage.getItem('memory_currentUserId') || 'default-user',
-  globalMemoryEnabled: false // Default to false
+  globalMemoryEnabled: false, // Default to false
+  // [PRISM] 2026-05-11 — Sprint 4: default off — user must explicitly enable Dreaming
+  prismDreamingEnabled: false
 }
 
 /**
@@ -88,6 +93,10 @@ const memorySlice = createSlice({
      */
     setGlobalMemoryEnabled: (state, action: PayloadAction<boolean>) => {
       state.globalMemoryEnabled = action.payload
+    },
+    // [PRISM] 2026-05-11 — Sprint 4: Dreaming toggle
+    setPrismDreamingEnabled: (state, action: PayloadAction<boolean>) => {
+      state.prismDreamingEnabled = action.payload
     }
   },
   selectors: {
@@ -108,15 +117,17 @@ const memorySlice = createSlice({
      * @param state - Memory state
      * @returns The global memory enabled state
      */
-    getGlobalMemoryEnabled: (state) => state.globalMemoryEnabled
+    getGlobalMemoryEnabled: (state) => state.globalMemoryEnabled,
+    // [PRISM] 2026-05-11 — Sprint 4: Dreaming selector
+    getPrismDreamingEnabled: (state) => state.prismDreamingEnabled
   }
 })
 
 // Export action creators
-export const { updateMemoryConfig, setCurrentUserId, setGlobalMemoryEnabled } = memorySlice.actions
+export const { updateMemoryConfig, setCurrentUserId, setGlobalMemoryEnabled, setPrismDreamingEnabled } = memorySlice.actions
 
 // Export selectors
-export const { getMemoryConfig, getCurrentUserId, getGlobalMemoryEnabled } = memorySlice.selectors
+export const { getMemoryConfig, getCurrentUserId, getGlobalMemoryEnabled, getPrismDreamingEnabled } = memorySlice.selectors
 
 // Type-safe selector for accessing this slice from the root state
 export const selectMemory = (state: { memory: MemoryState }) => state.memory
@@ -129,6 +140,9 @@ export const selectCurrentUserId = (state: { memory?: MemoryState }) => state.me
 
 // Root state selector for global memory enabled with safety check
 export const selectGlobalMemoryEnabled = (state: { memory?: MemoryState }) => state.memory?.globalMemoryEnabled ?? false
+
+// [PRISM] 2026-05-11 — Sprint 4: Root state selector for Dreaming enabled
+export const selectPrismDreamingEnabled = (state: { memory?: MemoryState }) => state.memory?.prismDreamingEnabled ?? false
 
 export { memorySlice }
 // Export the reducer as default export

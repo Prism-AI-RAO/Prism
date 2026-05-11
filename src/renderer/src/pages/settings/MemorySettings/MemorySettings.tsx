@@ -11,8 +11,10 @@ import {
   selectCurrentUserId,
   selectGlobalMemoryEnabled,
   selectMemoryConfig,
+  selectPrismDreamingEnabled,
   setCurrentUserId,
-  setGlobalMemoryEnabled
+  setGlobalMemoryEnabled,
+  setPrismDreamingEnabled
 } from '@renderer/store/memory'
 import type { MemoryItem } from '@types'
 import { Button, Dropdown, Empty, Flex, Form, Input, Modal, Space, Spin, Switch } from 'antd'
@@ -276,6 +278,8 @@ const MemorySettings = () => {
   const dispatch = useDispatch()
   const currentUser = useSelector(selectCurrentUserId)
   const globalMemoryEnabled = useSelector(selectGlobalMemoryEnabled)
+  // [PRISM] 2026-05-11 — Sprint 4: Dreaming toggle
+  const prismDreamingEnabled = useSelector(selectPrismDreamingEnabled)
 
   const [allMemories, setAllMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -586,6 +590,16 @@ const MemorySettings = () => {
     window.toast.success(t('memory.global_memory_disabled_title'))
   }
 
+  // [PRISM] 2026-05-11 — Sprint 4: Dreaming toggle handler
+  const handleDreamingToggle = (enabled: boolean) => {
+    dispatch(setPrismDreamingEnabled(enabled))
+    if (enabled) {
+      window.toast.success('✨ Dreaming 已开启 — 对话结束后将自动提炼记忆', 3)
+    } else {
+      window.toast.success('Dreaming 已关闭', 2)
+    }
+  }
+
   const { theme } = useTheme()
 
   return (
@@ -605,6 +619,20 @@ const MemorySettings = () => {
             <Button type="text" icon={<Settings2 size={16} />} onClick={() => setSettingsModalVisible(true)} />
           </HStack>
         </HStack>
+      </SettingGroup>
+
+      {/* [PRISM] 2026-05-11 — Sprint 4: Dreaming — 对话后自动记忆整合 */}
+      <SettingGroup style={{ justifyContent: 'space-between', alignItems: 'center' }} theme={theme}>
+        <HStack style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <HStack style={{ alignItems: 'center', gap: '2px' }}>
+            <SettingRowTitle>✨ Dreaming</SettingRowTitle>
+            <TextBadge text="Prism" />
+          </HStack>
+          <Switch checked={prismDreamingEnabled} onChange={handleDreamingToggle} />
+        </HStack>
+        <SettingHelpText style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+          对话结束后，Prism 将在后台自动提炼关键信息并写入长期记忆，让 AI 越用越懂你。
+        </SettingHelpText>
       </SettingGroup>
 
       {/* User Management */}

@@ -7,6 +7,7 @@ import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 
 import PrismAutoSetup from './components/PrismAutoSetup' // [PRISM] 2026-05-10 — Sprint 1
+import PrismDreaming from './components/PrismDreaming' // [PRISM] 2026-05-11 — Sprint 4
 import TopViewContainer from './components/TopView'
 import AntdProvider from './context/AntdProvider'
 import { CodeStyleProvider } from './context/CodeStyleProvider'
@@ -41,6 +42,8 @@ function App(): React.ReactElement {
                   <PersistGate loading={null} persistor={persistor}>
                     {/* [PRISM] 2026-05-10 — Sprint 1: 本地 AI 自动检测（无 UI） */}
                     <PrismAutoSetup />
+                    {/* [PRISM] 2026-05-11 — Sprint 4: Dreaming 后台记忆整合（无 UI） */}
+                    <PrismDreaming />
                     <TopViewContainer>
                       <Router />
                     </TopViewContainer>
