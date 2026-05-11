@@ -878,6 +878,8 @@ const api = {
         providerId: string
         apiBase: string
         models: Array<{ id: string; name: string }>
+        /** Provider type for direct connection routing */
+        providerType?: 'openai' | 'anthropic'
         /** Gateway auth token (e.g. OpenClaw requires Bearer token) */
         apiKey?: string
       }>
