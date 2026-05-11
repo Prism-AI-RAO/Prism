@@ -2,6 +2,7 @@ import { loggerService } from '@logger'
 import { modelsService } from '@main/apiServer/services/models'
 import type {
   AgentEntity,
+  AgentType,
   CreateAgentRequest,
   CreateAgentResponse,
   GetAgentResponse,
@@ -187,11 +188,14 @@ export class AgentService extends BaseService {
    *
    * @param opts.id - Fixed agent ID
    * @param opts.builtinRole - Role key used by BuiltinAgentProvisioner (e.g. 'assistant')
+   * @param opts.agentType - Agent type: 'claude-code' (Anthropic only) or 'generic' (any provider)
    * @param opts.provisionWorkspace - Callback to provision skills/plugins into the workspace and return agent config
    */
   async initBuiltinAgent(opts: {
     id: string
     builtinRole: string
+    // [PRISM] 2026-05-11 — 增加 agentType 参数，generic 类型使用任意 provider 模型，不限 Anthropic
+    agentType?: AgentType
     provisionWorkspace: (
       workspacePath: string,
       builtinRole: string
@@ -200,7 +204,7 @@ export class AgentService extends BaseService {
       | undefined
     >
   }): Promise<BuiltinAgentInitResult> {
-    const { id, builtinRole, provisionWorkspace } = opts
+    const { id, builtinRole, agentType = 'claude-code', provisionWorkspace } = opts
     try {
       const database = await this.getDatabase()
       const existing = await this.findAgentRow(id, { includeDeleted: true })
@@ -215,19 +219,31 @@ export class AgentService extends BaseService {
         const resolvedPaths = this.resolveAccessiblePaths([], id)
         const workspace = resolvedPaths[0]
         const agentConfig = workspace ? await provisionWorkspace(workspace, builtinRole) : undefined
-        if (agentConfig && (agentConfig.description || agentConfig.instructions)) {
-          const updateData: UpdateAgentRequest = {}
-          if (agentConfig.description) updateData.description = agentConfig.description
-          if (agentConfig.instructions) updateData.instructions = agentConfig.instructions
+        const updateData: UpdateAgentRequest = {}
+        if (agentConfig?.description) updateData.description = agentConfig.description
+        if (agentConfig?.instructions) updateData.instructions = agentConfig.instructions
+        // [PRISM] 2026-05-11 — 迁移旧 DB 中遗留的 claude-code type → generic（Prism Assistant 升级）
+        if (existing.type !== agentType) {
+          await database
+            .update(agentsTable)
+            .set({ type: agentType, updated_at: new Date().toISOString() })
+            .where(eq(agentsTable.id, id))
+          logger.info(`Migrated builtin ${builtinRole} agent type: ${existing.type} → ${agentType}`, { id })
+        } else if (Object.keys(updateData).length > 0) {
           await this.updateAgent(id, updateData)
         }
         return { agentId: id }
       }
 
-      const modelsRes = await modelsService.getModels({ providerType: 'anthropic', limit: 1 })
-      const firstModel = modelsRes.data?.[0]
+      // [PRISM] 2026-05-11 — generic 类型使用任意 provider 第一个可用模型，claude-code 仍限 Anthropic
+      const modelQuery =
+        agentType === 'generic'
+          ? await modelsService.getModels({ limit: 1 })
+          : await modelsService.getModels({ providerType: 'anthropic', limit: 1 })
+      const firstModel = modelQuery.data?.[0]
       if (!firstModel) {
-        logger.info(`No Anthropic-compatible models available yet — skipping ${builtinRole} creation`)
+        const hint = agentType === 'generic' ? 'any models' : 'Anthropic-compatible models'
+        logger.info(`No ${hint} available yet — skipping ${builtinRole} creation`)
         return { agentId: null, skippedReason: 'no_model' }
       }
 
@@ -247,7 +263,7 @@ export class AgentService extends BaseService {
       }
 
       const req: CreateAgentRequest = {
-        type: 'claude-code',
+        type: agentType,
         name: agentConfig?.name || builtinRole,
         description: agentConfig?.description || `Built-in ${builtinRole} agent`,
         instructions: agentConfig?.instructions || 'You are a helpful assistant.',

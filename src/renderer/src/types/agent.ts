@@ -25,7 +25,8 @@ export const SessionMessageRoleSchema = z.enum(sessionMessageRoles)
 
 export type SessionMessageType = TextStreamPart<Record<string, any>>['type']
 
-export const AgentTypeSchema = z.enum(['claude-code'])
+// [PRISM] 2026-05-11 — 增加 'generic' 类型，让 Prism Assistant 支持所有 Provider（不限 Anthropic）
+export const AgentTypeSchema = z.enum(['claude-code', 'generic'])
 export type AgentType = z.infer<typeof AgentTypeSchema>
 
 // ------------------ CherryClaw-specific types ------------------

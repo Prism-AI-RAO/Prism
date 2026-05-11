@@ -125,10 +125,12 @@ async function initCherryAssistant(): Promise<void> {
     const result = await agentService.initBuiltinAgent({
       id: CHERRY_ASSISTANT_AGENT_ID,
       builtinRole: 'assistant',
+      // [PRISM] 2026-05-11 — Prism Assistant 使用 generic 类型，支持所有 Provider 模型（不限 Anthropic）
+      agentType: 'generic',
       provisionWorkspace: provisionBuiltinAgent
     })
-    await handleInitResult(CHERRY_ASSISTANT_AGENT_ID, 'Cherry Assistant', result, initCherryAssistant)
+    await handleInitResult(CHERRY_ASSISTANT_AGENT_ID, 'Prism Assistant', result, initCherryAssistant)
   } catch (error) {
-    logger.warn('Failed to init Cherry Assistant agent:', error as Error)
+    logger.warn('Failed to init Prism Assistant agent:', error as Error)
   }
 }
