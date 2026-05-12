@@ -75,6 +75,10 @@ asarUnpack:
   - resources/**
   - "**/*.{metal,exp,lib}"
   - "node_modules/@img/sharp-*/**"
+  # [PRISM] 2026-05-12 — proxy (asar.unpacked) 无法读取 asar 内部模块，需单独 unpack
+  - "node_modules/ipaddr.js/**"
+  - "node_modules/ms/**"
+  - "node_modules/es-object-atoms/**"
 
 # [PRISM] 2026-05-11 — 禁止 electron-builder 触发 pnpm install（避免 xlsx exotic dep 阻断）
 npmRebuild: false
