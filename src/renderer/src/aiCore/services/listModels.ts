@@ -11,6 +11,7 @@ import {
 } from '@ai-sdk/provider-utils'
 import { loggerService } from '@logger'
 import { COPILOT_DEFAULT_HEADERS } from '@renderer/aiCore/provider/constants'
+import { SYSTEM_MODELS } from '@renderer/config/models/default'
 import store from '@renderer/store'
 import type { EndpointType, Model, Provider } from '@renderer/types'
 import { SystemProviderIds } from '@renderer/types'
@@ -522,6 +523,11 @@ function isUnsupported(provider: Provider): boolean {
 
 export async function listModels(provider: Provider, abortSignal?: AbortSignal): Promise<Model[]> {
   try {
+    // [PRISM] 2026-05-12 — Anthropic 官方 API 无 /models 端点，返回内置硬编码模型列表
+    if (provider.id === SystemProviderIds.anthropic) {
+      return SYSTEM_MODELS[SystemProviderIds.anthropic] ?? []
+    }
+
     if (isUnsupported(provider)) {
       logger.warn('Provider does not support model listing via listModels', { providerId: provider.id })
       return []
