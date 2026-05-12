@@ -4,7 +4,7 @@ import ModelSelector from '@renderer/components/ModelSelector'
 import { InfoTooltip } from '@renderer/components/TooltipIcons'
 import { isEmbeddingModel, isRerankModel } from '@renderer/config/models'
 import { useModel } from '@renderer/hooks/useModel'
-import { useProviders } from '@renderer/hooks/useProvider'
+import { useAllProviders, useProviders } from '@renderer/hooks/useProvider'
 import { getModelUniqId } from '@renderer/services/ModelService'
 import { selectMemoryConfig, updateMemoryConfig } from '@renderer/store/memory'
 import type { Model } from '@renderer/types'
@@ -31,6 +31,8 @@ type formValue = {
 
 const MemorySettingsModal: FC<MemorySettingsModalProps> = ({ visible, onSubmit, onCancel, form }) => {
   const { providers } = useProviders()
+  // [PRISM] 2026-05-12 — 嵌入模型选择器使用全量 provider，未启用的 provider 也能看到 embedding 模型
+  const allProviders = useAllProviders()
   const dispatch = useDispatch()
   const memoryConfig = useSelector(selectMemoryConfig)
   const [loading, setLoading] = useState(false)
@@ -58,13 +60,16 @@ const MemorySettingsModal: FC<MemorySettingsModalProps> = ({ visible, onSubmit, 
       // values.llmModel and values.embeddingModel are JSON strings from getModelUniqId()
       // e.g., '{"id":"gpt-4","provider":"openai"}'
       // We need to find models by comparing with getModelUniqId() result
-      const allModels = providers.flatMap((p) => p.models)
-      const llmModel = allModels.find((m) => getModelUniqId(m) === values.llmModel)
+      const enabledModels = providers.flatMap((p) => p.models)
+      const llmModel = enabledModels.find((m) => getModelUniqId(m) === values.llmModel)
+      // [PRISM] 2026-05-12 — 从全量 provider 中查找 embedding 模型，支持未启用的 provider
+      const allModels = allProviders.flatMap((p) => p.models)
       const embeddingModel = allModels.find((m) => getModelUniqId(m) === values.embeddingModel)
 
       if (embeddingModel) {
         setLoading(true)
-        const provider = providers.find((p) => p.id === embeddingModel.provider)
+        // [PRISM] 2026-05-12 — 在全量 provider 中查找，未启用的 embedding provider 也能正常保存
+        const provider = allProviders.find((p) => p.id === embeddingModel.provider)
 
         if (!provider) {
           return
@@ -134,8 +139,9 @@ const MemorySettingsModal: FC<MemorySettingsModalProps> = ({ visible, onSubmit, 
           label={t('memory.embedding_model')}
           name="embeddingModel"
           rules={[{ required: true, message: t('memory.please_select_embedding_model') }]}>
+          {/* [PRISM] 2026-05-12 — 使用 allProviders，未启用的 provider 的 embedding 模型也可选 */}
           <ModelSelector
-            providers={providers}
+            providers={allProviders}
             predicate={embeddingPredicate}
             placeholder={t('memory.select_embedding_model_placeholder')}
           />
@@ -146,7 +152,8 @@ const MemorySettingsModal: FC<MemorySettingsModalProps> = ({ visible, onSubmit, 
           {({ getFieldValue }) => {
             const embeddingModelId = getFieldValue('embeddingModel')
             // embeddingModelId is a JSON string from getModelUniqId(), find model by comparing
-            const allModels = providers.flatMap((p) => p.models)
+            // [PRISM] 2026-05-12 — 从全量 provider 查找，与上方选择器保持一致
+            const allModels = allProviders.flatMap((p) => p.models)
             const embeddingModel = allModels.find((m) => getModelUniqId(m) === embeddingModelId)
             return (
               <Form.Item
