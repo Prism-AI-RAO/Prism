@@ -289,6 +289,12 @@ export default class AppUpdater {
   }
 
   public async checkForUpdates() {
+    // [PRISM] 2026-05-12 — 禁用 auto-update：Prism 尚未建立自己的 release 渠道，
+    // 防止误装上游 Cherry Studio 更新覆盖 Prism 定制代码。
+    // 待 github.com/Prism-AI-RAO/Prism 建立正式 release 后删除此 early return。
+    logger.info('Auto-update disabled for Prism — no release channel configured yet')
+    return { currentVersion: app.getVersion(), updateInfo: null }
+
     void analyticsService.trackAppUpdate()
 
     if (isWin && 'PORTABLE_EXECUTABLE_DIR' in process.env) {
