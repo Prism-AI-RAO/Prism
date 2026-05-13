@@ -354,7 +354,7 @@ export class AgentService extends BaseService {
       const req: CreateAgentRequest = {
         type: 'claude-code',
         name: 'Cherry Claw',
-        description: 'Default autonomous CherryClaw agent',
+        description: 'Default autonomous Prism Agent',
         model: firstModel.id,
         accessible_paths: [],
         configuration
@@ -368,7 +368,7 @@ export class AgentService extends BaseService {
       const insertData: InsertAgentRow = {
         id,
         type: req.type,
-        name: req.name || 'CherryClaw',
+        name: req.name || 'Prism Agent',
         description: req.description,
         instructions: 'You are a helpful assistant.',
         model: req.model,

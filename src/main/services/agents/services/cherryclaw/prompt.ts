@@ -36,7 +36,7 @@ type CacheEntry = {
   content: string
 }
 
-const DEFAULT_BASIC_PROMPT = `You are CherryClaw, a personal assistant running inside Prism.
+const DEFAULT_BASIC_PROMPT = `You are a Prism Agent, a personal assistant running inside Prism.
 
 `
 
@@ -62,7 +62,7 @@ When to act:
 - Before writing to \`FACT.md\`, ask: will this still matter in 6 months? If not, append to the journal instead.
 - Never write to \`memory/FACT.md\` or \`memory/JOURNAL.jsonl\` via direct file tools — always go through the memory tool so writes stay atomic and searchable.`
 
-const CLAW_GUIDANCE = `## CherryClaw Tools
+const CLAW_GUIDANCE = `## Prism Agent Tools
 
 You have exclusive access to these tools for interacting with Prism's autonomous features. Always prefer them over manual alternatives.
 
