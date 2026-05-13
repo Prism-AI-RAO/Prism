@@ -46,6 +46,82 @@ import { filterStandardParams, getMaxTokens, getTemperature, getTopP } from './m
 
 const logger = loggerService.withContext('parameterBuilder')
 
+// ── [PRISM] 2026-05-14 — Sprint 10-D: Hermes 记忆注入中间件 ──────────────────
+// 在每次 AI 响应前，从 Hermes 拉取用户记忆上下文，注入 System Prompt 前缀。
+// 覆盖范围：所有 Agent（Prism Main、Cherry Claw、OpenClaw Agent 等）
+// 性能保护：5s 超时 + 静默失败，不阻塞正常对话
+
+const HERMES_MEMORY_API = 'http://localhost:8642/v1/chat/completions'
+const HERMES_MEMORY_AUTH = 'prism-local-dev'
+/** 记忆注入的最大字符数（避免撑爆 context window）*/
+const HERMES_INJECT_MAX_CHARS = 800
+/** 两次记忆查询之间的最短间隔（避免同一会话高频调用）*/
+const HERMES_INJECT_DEBOUNCE_MS = 30_000
+
+let _lastHermesInjectAt = 0
+let _cachedHermesContext: string | null = null
+
+async function fetchHermesContextForInjection(): Promise<string | null> {
+  // 去抖动：30s 内复用缓存
+  const now = Date.now()
+  if (_cachedHermesContext !== null && now - _lastHermesInjectAt < HERMES_INJECT_DEBOUNCE_MS) {
+    return _cachedHermesContext
+  }
+
+  try {
+    const res = await fetch(HERMES_MEMORY_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HERMES_MEMORY_AUTH}`
+      },
+      body: JSON.stringify({
+        model: 'hermes-agent',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are Hermes memory assistant. Output ONLY a concise bullet-point summary of the most important ' +
+              'long-term facts about the user (max 5 bullets, plain text, no markdown headers). ' +
+              'If nothing is stored yet, output exactly: [No memory yet]'
+          },
+          { role: 'user', content: 'Summarize user memory context for injection into a system prompt.' }
+        ],
+        max_tokens: 200,
+        stream: false
+      }),
+      signal: AbortSignal.timeout(5_000)
+    })
+
+    if (!res.ok) {
+      _cachedHermesContext = null
+      return null
+    }
+
+    const data = await res.json()
+    const content: string = data?.choices?.[0]?.message?.content ?? ''
+    const trimmed = content.trim()
+
+    if (!trimmed || trimmed === '[No memory yet]') {
+      _cachedHermesContext = null
+      _lastHermesInjectAt = now
+      return null
+    }
+
+    const truncated = trimmed.length > HERMES_INJECT_MAX_CHARS
+      ? trimmed.slice(0, HERMES_INJECT_MAX_CHARS) + '…'
+      : trimmed
+
+    _cachedHermesContext = truncated
+    _lastHermesInjectAt = now
+    return truncated
+  } catch {
+    // Hermes 离线或超时 — 静默跳过，不影响响应
+    return null
+  }
+}
+// ── End Sprint 10-D helpers ───────────────────────────────────────────────────
+
 /**
  * Validates and clamps maxToolCalls to valid range
  * Falls back to DEFAULT_ASSISTANT_SETTINGS.maxToolCalls if invalid
@@ -233,6 +309,19 @@ export async function buildStreamTextParams(
     if (autoModePrompt) {
       systemPrompt = systemPrompt ? `${systemPrompt}\n\n${autoModePrompt}` : autoModePrompt
     }
+  }
+
+  // [PRISM] 2026-05-14 — Sprint 10-D: 注入 Hermes 用户记忆上下文到 System Prompt
+  // 30s 缓存 + 5s 超时，确保不阻塞正常对话流程
+  try {
+    const hermesCtx = await fetchHermesContextForInjection()
+    if (hermesCtx) {
+      const hermesPrefix = `[User Memory from Hermes]\n${hermesCtx}\n[End User Memory]\n\n`
+      systemPrompt = systemPrompt ? `${hermesPrefix}${systemPrompt}` : hermesPrefix.trimEnd()
+      logger.debug(`[Sprint10D] Injected ${hermesCtx.length}c Hermes context into system prompt`)
+    }
+  } catch {
+    // 非阻塞：记忆注入失败不影响正常对话
   }
 
   if (systemPrompt) {

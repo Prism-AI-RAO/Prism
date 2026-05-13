@@ -254,6 +254,18 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
     provider: 'PrismAI',
     installSource: 'builtin',
     isTrusted: true
+  },
+  // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
+  // 将 Hermes 长期记忆能力注入全系统所有 Agent（hermes_context_get / write / search）
+  {
+    id: nanoid(),
+    name: BuiltinMCPServerNames.hermesMemory,
+    type: 'inMemory',
+    isActive: true,
+    description: 'Hermes long-term memory engine — gives all agents access to user memory across sessions',
+    provider: 'PrismAI',
+    installSource: 'builtin',
+    isTrusted: true
   }
 ] as const
 

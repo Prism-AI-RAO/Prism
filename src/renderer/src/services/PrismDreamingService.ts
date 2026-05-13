@@ -1,4 +1,5 @@
 // [PRISM] 2026-05-11 — Sprint 4: Dreaming — 对话后后台记忆整合
+// [PRISM] 2026-05-14 — Sprint 10-B: 升级 — 提炼的记忆同步写入 Hermes（双写闭环）
 // ─────────────────────────────────────────────────────────────────────────────
 // 每次 AI 响应完成后（MESSAGE_COMPLETE），对话 "进入梦境"：
 //   1. 收集本 Topic 最近的消息（最多 20 条）
@@ -35,6 +36,57 @@ const MIN_DREAM_INTERVAL_MS = 5 * 60 * 1000
 
 /** Maximum messages to include in the dreaming prompt */
 const MAX_MESSAGES = 20
+
+// ── Dreaming system prompt ────────────────────────────────────────────────────
+
+// ── Hermes 双写函数 ───────────────────────────────────────────────────────────
+
+const HERMES_API = 'http://localhost:8642/v1/chat/completions'
+const HERMES_AUTH = 'prism-local-dev'
+
+/**
+ * [PRISM] 2026-05-14 — Sprint 10-B
+ * 将提炼好的记忆推送给 Hermes，让它合并到自己的 MEMORY.md 并触发自进化。
+ * 非阻塞：失败不影响本地写入。
+ */
+async function syncMemoryToHermes(memoryEntry: string): Promise<void> {
+  try {
+    const res = await fetch(HERMES_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HERMES_AUTH}`
+      },
+      body: JSON.stringify({
+        model: 'hermes-agent',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are Hermes, a memory consolidation engine. ' +
+              'You receive a new memory entry extracted from a conversation. ' +
+              'Acknowledge receipt with one short sentence. Do not elaborate.'
+          },
+          {
+            role: 'user',
+            content: `New memory entry from Prism Dreaming:\n\n${memoryEntry}`
+          }
+        ],
+        max_tokens: 32,
+        stream: false
+      }),
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (res.ok) {
+      logger.info(`[Dreaming] ✅ Hermes sync successful for entry: "${memoryEntry.slice(0, 60)}…"`)
+    } else {
+      logger.warn(`[Dreaming] Hermes sync HTTP ${res.status} — local write still succeeded`)
+    }
+  } catch (e) {
+    // Hermes 离线时静默跳过，本地写入已完成
+    logger.debug(`[Dreaming] Hermes sync skipped (offline or timeout): ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
 
 // ── Dreaming system prompt ────────────────────────────────────────────────────
 
@@ -133,12 +185,15 @@ async function triggerDreaming(topicId: string): Promise<void> {
       return
     }
 
-    // 5. Write to MEMORY.md via IPC
+    // 5. Write to MEMORY.md via IPC (本地持久化)
     const trimmed = result.trim()
     await window.api.prism.memory.appendEntry(trimmed, ['dreaming'])
 
     lastDreamAt.set(topicId, Date.now())
     logger.info(`[Dreaming] ✅ Memory appended for topic ${topicId.slice(0, 8)}: "${trimmed.slice(0, 80)}…"`)
+
+    // 6. [PRISM] 2026-05-14 — Sprint 10-B: 同步写入 Hermes（双写闭环，非阻塞）
+    void syncMemoryToHermes(trimmed)
   } catch (error) {
     // Non-fatal — dreaming failure must never affect the conversation
     logger.warn(`[Dreaming] Failed for topic ${topicId.slice(0, 8)}: ${error instanceof Error ? error.message : String(error)}`)

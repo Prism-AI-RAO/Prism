@@ -866,7 +866,8 @@ export const BuiltinMCPServerNames = {
   browser: '@cherry/browser',
   nowledgeMem: '@cherry/nowledge-mem',
   hub: '@cherry/hub',
-  prismMemory: '@prism/memory' // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
+  prismMemory: '@prism/memory', // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
+  hermesMemory: '@prism/hermes-memory' // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
 } as const
 
 export type BuiltinMCPServerName = (typeof BuiltinMCPServerNames)[keyof typeof BuiltinMCPServerNames]

@@ -360,7 +360,8 @@ const builtInMcpDescriptionKeyMap: Record<BuiltinMCPServerName, string> = {
   [BuiltinMCPServerNames.browser]: 'settings.mcp.builtinServersDescriptions.browser',
   [BuiltinMCPServerNames.nowledgeMem]: 'settings.mcp.builtinServersDescriptions.nowledge_mem',
   [BuiltinMCPServerNames.hub]: 'settings.mcp.builtinServersDescriptions.hub',
-  [BuiltinMCPServerNames.prismMemory]: 'settings.mcp.builtinServersDescriptions.prism_memory' // [PRISM] 2026-05-10 — Sprint 2
+  [BuiltinMCPServerNames.prismMemory]: 'settings.mcp.builtinServersDescriptions.prism_memory', // [PRISM] 2026-05-10 — Sprint 2
+  [BuiltinMCPServerNames.hermesMemory]: 'settings.mcp.builtinServersDescriptions.hermes_memory' // [PRISM] 2026-05-14 — Sprint 10-A
 } as const
 
 export const getBuiltInMcpServerDescriptionLabel = (key: string): string => {

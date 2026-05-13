@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
+import http from 'node:http'
 import path from 'node:path'
 
 import { loggerService } from '@logger'
@@ -29,6 +30,89 @@ const TYPING_INTERVAL_MS = 4000
 
 /** Max number of entries in the session tracker before evicting oldest entries. */
 const SESSION_TRACKER_MAX_SIZE = 500
+
+// ── [PRISM] 2026-05-14 — Sprint 10-C: Hermes 记忆集成（Channels 维度）──────────
+// 所有 Channel 消息（Telegram/Slack/Discord 等）在处理前查询 Hermes 用户记忆，
+// 处理后将对话写入 Hermes，实现 Channels 维度的记忆积累。
+
+const HERMES_API_HOST = 'localhost'
+const HERMES_API_PORT = 8642
+const HERMES_AUTH_TOKEN = 'prism-local-dev'
+
+async function callHermesOneShot(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 256
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const body = JSON.stringify({
+      model: 'hermes-agent',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: maxTokens,
+      stream: false
+    })
+
+    const options = {
+      hostname: HERMES_API_HOST,
+      port: HERMES_API_PORT,
+      path: '/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${HERMES_AUTH_TOKEN}`,
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }
+
+    const req = http.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data)
+          resolve(parsed?.choices?.[0]?.message?.content ?? null)
+        } catch {
+          resolve(null)
+        }
+      })
+    })
+    req.on('error', () => resolve(null))
+    req.setTimeout(8_000, () => { req.destroy(); resolve(null) })
+    req.write(body)
+    req.end()
+  })
+}
+
+/**
+ * 查询 Hermes：返回与当前 Channel 用户相关的记忆上下文（最多 800 字符）。
+ * 离线或失败时静默返回 null。
+ */
+async function getHermesChannelContext(userName: string): Promise<string | null> {
+  try {
+    return await callHermesOneShot(
+      'You are Hermes memory assistant. Return ONLY a brief, relevant summary of what you know about this user ' +
+        '(3-5 facts max, in plain text). If nothing is known, return empty string.',
+      `Retrieve memory context for channel user: "${userName}"`
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 写入 Hermes：将一条 Channel 对话摘要注入 Hermes 记忆（异步非阻塞）。
+ */
+function writeChannelExchangeToHermes(userName: string, userMessage: string, agentReply: string): void {
+  void callHermesOneShot(
+    'You are Hermes memory consolidation engine. You receive a channel conversation snippet. ' +
+      'Acknowledge receipt with one sentence. Store any durable facts about the user silently.',
+    `Channel conversation with "${userName}":\nUser: ${userMessage.slice(0, 400)}\nAgent: ${agentReply.slice(0, 400)}`
+  ).catch(() => {})
+}
+// ── End Sprint 10-C Hermes helpers ────────────────────────────────────────────
 
 /**
  * How long to wait for additional messages before flushing a batch.
@@ -236,8 +320,22 @@ export class ChannelMessageHandler {
         textWithAttachments += `\n\n[Attached files saved to workspace]\n${filePaths.map((p) => `- ${p}`).join('\n')}`
       }
 
+      // [PRISM] 2026-05-14 — Sprint 10-C: 消息前查询 Hermes 用户记忆并注入上下文
+      let hermesContextPrefix = ''
+      try {
+        const ctx = await getHermesChannelContext(message.userName)
+        if (ctx && ctx.trim()) {
+          hermesContextPrefix =
+            `[Hermes Memory Context for ${message.userName}]\n${ctx.trim()}\n[End Memory Context]\n\n`
+          logger.debug(`[HermesChannel] Injected ${ctx.length}c memory context for ${message.userName}`)
+        }
+      } catch {
+        // 非阻塞：失败不影响消息处理
+      }
+      const textWithMemory = hermesContextPrefix + textWithAttachments
+
       // Wrap untrusted channel input with security boundary markers
-      const securedContent = wrapExternalContent(textWithAttachments, {
+      const securedContent = wrapExternalContent(textWithMemory, {
         chatId: message.chatId,
         userId: message.userId,
         userName: message.userName,
@@ -303,6 +401,9 @@ export class ChannelMessageHandler {
           if (!finalized) {
             await this.sendChunked(adapter, message.chatId, sanitizedText)
           }
+
+          // [PRISM] 2026-05-14 — Sprint 10-C: 对话完成后异步写入 Hermes（非阻塞）
+          writeChannelExchangeToHermes(message.userName, message.text, sanitizedText)
         }
       } catch (streamError) {
         // Notify adapter of the error so it can update streaming UI
