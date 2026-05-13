@@ -1,5 +1,5 @@
 ---
-name: cherry-assistant-guide
+name: prism-guide
 description: Prism 产品知识库、源码路径索引、故障排查和页面导航。当用户询问 Prism 的功能、配置、报错、使用方法时触发。也适用于用户提到 provider、模型、知识库、Agent、MCP、OpenClaw、Hermes、PDF、快捷短语等关键词的场景。
 ---
 
