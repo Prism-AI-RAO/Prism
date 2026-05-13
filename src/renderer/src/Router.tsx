@@ -20,6 +20,7 @@ import MinAppPage from './pages/minapps/MinAppPage'
 import MinAppsPage from './pages/minapps/MinAppsPage'
 import NotesPage from './pages/notes/NotesPage'
 import { OnboardingPage } from './pages/onboarding'
+import HermesChatPage from './pages/hermes/HermesChatPage' // [PRISM] 2026-05-13 — Sprint 9
 import OpenClawPage from './pages/openclaw/OpenClawPage'
 import PrismMultiAgentPage from './pages/sessions/PrismMultiAgentPage' // [PRISM] 2026-05-11 — Sprint 5
 import PaintingsRoutePage from './pages/paintings/PaintingsRoutePage'
@@ -49,6 +50,8 @@ const Router: FC = () => {
           <Route path="/openclaw" element={<OpenClawPage />} />
           {/* [PRISM] 2026-05-11 — Sprint 5: Multi-Agent 对话页面 */}
           <Route path="/sessions" element={<PrismMultiAgentPage />} />
+          {/* [PRISM] 2026-05-13 — Sprint 9: Hermes Chat UI */}
+          <Route path="/hermes" element={<HermesChatPage />} />
           <Route path="/settings/*" element={<SettingsPage />} />
           <Route path="/launchpad" element={<LaunchpadPage />} />
         </Routes>

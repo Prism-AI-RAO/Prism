@@ -14,6 +14,7 @@ import { ThemeMode } from '@renderer/types'
 import { isEmoji } from '@renderer/utils'
 import { Avatar, Tooltip } from 'antd'
 import {
+  BotMessageSquare,
   Code,
   FileSearch,
   Folder,
@@ -157,25 +158,42 @@ const MainMenus: FC = () => {
     openclaw: '/openclaw'
   }
 
-  return sidebarIcons.visible.map((icon) => {
-    const path = pathMap[icon]
-    const isActive = path === '/' ? isRoute(path) : isRoutes(path)
+  return (
+    <>
+      {sidebarIcons.visible.map((icon) => {
+        const path = pathMap[icon]
+        const isActive = path === '/' ? isRoute(path) : isRoutes(path)
 
-    return (
-      <Tooltip key={icon} title={getSidebarIconLabel(icon)} mouseEnterDelay={0.8} placement="right">
+        return (
+          <Tooltip key={icon} title={getSidebarIconLabel(icon)} mouseEnterDelay={0.8} placement="right">
+            <StyledLink
+              onClick={async () => {
+                hideMinappPopup()
+                await modelGenerating()
+                navigate(path)
+              }}>
+              <Icon theme={theme} className={isActive}>
+                {iconMap[icon]}
+              </Icon>
+            </StyledLink>
+          </Tooltip>
+        )
+      })}
+      {/* [PRISM] 2026-05-13 — Sprint 9: Hermes Chat 固定入口 */}
+      <Tooltip title="Hermes" mouseEnterDelay={0.8} placement="right">
         <StyledLink
           onClick={async () => {
             hideMinappPopup()
             await modelGenerating()
-            navigate(path)
+            navigate('/hermes')
           }}>
-          <Icon theme={theme} className={isActive}>
-            {iconMap[icon]}
+          <Icon theme={theme} className={isRoutes('/hermes')}>
+            <BotMessageSquare size={18} className="icon" />
           </Icon>
         </StyledLink>
       </Tooltip>
-    )
-  })
+    </>
+  )
 }
 
 const Container = styled.div<{ $isFullscreen: boolean }>`
