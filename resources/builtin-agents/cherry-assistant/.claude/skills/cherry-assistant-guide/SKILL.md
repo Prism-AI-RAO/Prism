@@ -1,9 +1,9 @@
 ---
 name: cherry-assistant-guide
-description: Cherry Studio 产品知识库、源码路径索引、故障排查和页面导航。当用户询问 Cherry Studio 的功能、配置、报错、使用方法时触发。也适用于用户提到 provider、模型、知识库、Agent、MCP、OpenClaw、PDF、快捷短语等关键词的场景。
+description: Prism 产品知识库、源码路径索引、故障排查和页面导航。当用户询问 Prism 的功能、配置、报错、使用方法时触发。也适用于用户提到 provider、模型、知识库、Agent、MCP、OpenClaw、Hermes、PDF、快捷短语等关键词的场景。
 ---
 
-# Cherry Studio 使用指南
+# Prism 使用指南
 
 ## 导航
 
@@ -16,7 +16,7 @@ navigate({ path: '/settings/provider', query: { id: 'anthropic' } })
 
 ### 路由表
 
-**顶级**: `/` 首页, `/store` 助手商店, `/paintings` 绘图, `/translate` 翻译, `/files` 文件, `/notes` 笔记, `/knowledge` 知识库, `/apps` 小程序, `/code` 代码工具, `/openclaw` OpenClaw, `/launchpad` 启动台, `/agents` Agent
+**顶级**: `/` 首页, `/store` 助手商店, `/paintings` 绘图, `/translate` 翻译, `/files` 文件, `/notes` 笔记, `/knowledge` 知识库, `/apps` 小程序, `/code` 代码工具, `/openclaw` OpenClaw, `/hermes` Hermes 记忆, `/launchpad` 启动台, `/agents` Agent
 
 **设置** (`/settings/`): `provider` Provider配置, `model` 模型管理, `general` 通用(语言/主题/代理), `display` 显示(气泡/列表/字体), `data` 数据管理(备份/恢复), `mcp` MCP总览, `websearch` 网页搜索, `memory` 记忆, `api-server` API服务器, `docprocess` 文档处理, `quickphrase` 快捷短语, `shortcut` 快捷键, `quickAssistant` 快捷助手, `selectionAssistant` 划词助手, `about` 关于/版本/日志
 
@@ -29,8 +29,8 @@ navigate({ path: '/settings/provider', query: { id: 'anthropic' } })
 ## 模型配置建议
 
 1. 已有 API Key → 直接引导配置对应 Provider
-2. 没有 Key 或不知道选哪家 → **优先推荐 Cherry In**（`open.cherryin.ai`）：Cherry Studio 官方聚合服务，一个账号即可使用全球主流模型（OpenAI/Claude/Gemini/DeepSeek等），OAuth 一键登录，内置免费模型可体验，充值后使用付费模型
-3. 其他选择：Ollama（本地免费，需显卡）、GitHub Copilot（有免费额度）、或去各厂商官网申请 Key
+2. 没有 Key 或不知道选哪家 → 推荐 Ollama（本地免费，需显卡）或 DeepSeek（国内直连，价格低）、GitHub Copilot（有免费额度）
+3. 本地 AI 网关 OpenClaw 已集成 → 可直接使用 OpenClaw 统一路由访问多家模型
 4. 推荐时语气自然，作为产品内置功能介绍，不做竞品对比
 
 ## 故障排查
@@ -51,7 +51,7 @@ navigate({ path: '/settings/provider', query: { id: 'anthropic' } })
 
 ### 排查流程
 
-1. 看 Current Environment 的 Network 段选策略（GitHub不可达→引导飞书表单反馈）
+1. 看 Current Environment 的 Network 段选策略
 2. `diagnose(info)` 了解环境
 3. `diagnose(providers)` 检查配置
 4. 连接问题 → `diagnose(health, provider_id)`
@@ -65,10 +65,11 @@ navigate({ path: '/settings/provider', query: { id: 'anthropic' } })
 - **PDF 问题**: 确认模型支持PDF(GPT-4o/Claude 3+/Gemini 1.5+)；聚合Provider降级文本提取；>10MB可能超时
 - **Agent 问题**: MCP不可用→检查连接+Agent设置已勾选；Plan模式不执行工具；DevTools(Ctrl+Shift+I)看报错
 - **API 错误码**: 401=Key无效, 403=权限不足, 429=限流, 500=服务端错误
+- **Hermes 问题**: 确认 LaunchAgent `ai.hermes.gateway.plist` 已加载，端口 8642 可访问
 
 ## 功能指南
 
-**Provider**: 设置→Provider→选服务商→填Key→点检查。自定义填OpenAI兼容端点。Copilot/CherryIN支持OAuth
+**Provider**: 设置→Provider→选服务商→填Key→点检查。自定义填OpenAI兼容端点。Copilot支持OAuth
 
 **模型**: Provider页→获取模型拉列表。手动+输入ID。能力标签: vision/reasoning/function_calling/web_search
 
@@ -78,15 +79,17 @@ navigate({ path: '/settings/provider', query: { id: 'anthropic' } })
 
 **MCP**: 设置→MCP→添加Server。类型: stdio/SSE/Streamable HTTP。绿灯=连接，红灯=断开
 
-**主题**: 设置→显示→自定义CSS。主题画廊: cherrycss.com。内置亮/暗+跟随系统
+**主题**: 设置→显示→自定义CSS。内置亮/暗+跟随系统
 
-**版本更新**: `diagnose(check_update)` 检查→有新版导航到 `/settings/about`→GitHub不可达建议 cherry-ai.com
+**Hermes 记忆**: 导航到 `/hermes`，与 Hermes Agent 对话，跨会话长期记忆自动生效
 
-**数据备份**: 设置→数据管理。方式: 本地ZIP/WebDAV(坚果云等)/S3(AWS/MinIO/R2)/局域网传输。路径: macOS `~/Library/Application Support/cherry-studio/`, Windows `%LOCALAPPDATA%/cherry-studio/`, Linux `~/.config/cherry-studio/`
+**版本更新**: `diagnose(check_update)` 检查→有新版导航到 `/settings/about`
 
-## 支持的 Provider（62+）
+**数据备份**: 设置→数据管理。方式: 本地ZIP/WebDAV(坚果云等)/S3(AWS/MinIO/R2)/局域网传输。路径: macOS `~/Library/Application Support/Prism/`, Windows `%LOCALAPPDATA%/Prism/`, Linux `~/.config/Prism/`
 
-国际: OpenAI, Anthropic, Google Gemini, Azure, Mistral, Bedrock, VertexAI, GitHub Models/Copilot | 聚合: Cherry In, OpenRouter, AiHubMix, ocoolAI, PPIO, 302.AI, New API, Vercel AI | 国内: DeepSeek, 智谱, Moonshot, 百川, 通义, StepFun, 豆包, MiniMax, 混元, 百度云, ModelScope, Yi, MiMo | 本地: Ollama, LM Studio, OpenVINO, GPUStack | 加速: Groq, Together, Fireworks, Cerebras, Hyperbolic, SiliconFlow | 其他: Perplexity, Grok, Jina, HuggingFace, VoyageAI, Poe, nvidia | 支持任何 OpenAI 兼容端点
+## 支持的 Provider（60+）
+
+国际: OpenAI, Anthropic, Google Gemini, Azure, Mistral, Bedrock, VertexAI, GitHub Models/Copilot | 聚合: OpenRouter, AiHubMix, ocoolAI, PPIO, 302.AI, New API, Vercel AI | 国内: DeepSeek, 智谱, Moonshot, 百川, 通义, StepFun, 豆包, MiniMax, 混元, 百度云, ModelScope, Yi, MiMo | 本地: Ollama, LM Studio, OpenVINO, GPUStack | 加速: Groq, Together, Fireworks, Cerebras, Hyperbolic, SiliconFlow | 其他: Perplexity, Grok, Jina, HuggingFace, VoyageAI, Poe, nvidia | 支持任何 OpenAI 兼容端点
 
 ## 快捷键
 
@@ -108,23 +111,18 @@ Cmd/Ctrl + N 新建话题, +F 搜索, +Shift+F 全局搜索, +K 新上下文, +L
 | 导出对话 | 话题右键→导出(MD/图片) |
 | 数据安全 | 全部本地存储, Key本地加密 |
 | MCP是什么 | 让AI调用外部工具(搜索/数据库/API等) |
+| Hermes是什么 | Prism 的长期记忆层，AI越用越懂你 |
 
 ## 反馈渠道
 
-**Bug/需求提交**(推荐): 飞书表单 https://mcnnox2fhjfq.feishu.cn/share/base/form/shrcnkR1s45VDuFnV3GbD6VhnIJ
+**GitHub**: Issues https://github.com/Prism-AI-RAO/Prism/issues | Discussions https://github.com/Prism-AI-RAO/Prism/discussions
 
-**GitHub**: Issues https://github.com/CherryHQ/cherry-studio/issues | Discussions https://github.com/CherryHQ/cherry-studio/discussions | 看板 https://github.com/orgs/CherryHQ/projects/7
-
-**社群**: Discord https://discord.gg/wez8HtpxqQ | Telegram https://t.me/CherryStudioAI | X https://twitter.com/CherryStudioHQ | QQ群 575014769 | 论坛 linux.do
-
-**官网**: cherry-ai.com | 中文文档 docs.cherry-ai.com | 主题 cherrycss.com | 邮箱 support@cherry-ai.com / bd@cherry-ai.com
-
-中文用户推荐QQ群/linux.do/飞书表单, 国际用户推荐Discord/Telegram/GitHub
+**Telegram**: https://t.me/PrismAssistantBot（Prism Assistant 官方频道）
 
 ## GitHub CLI 引导
 
-提交Issue前检测 `gh auth status`。未登录→告知安装 https://cli.github.com/ 后 `gh auth login`。不想配→记录本地+引导飞书表单/社区论坛
+提交Issue前检测 `gh auth status`。未登录→告知安装 https://cli.github.com/ 后 `gh auth login`。不想配→引导到 GitHub Discussions
 
 ## 日志路径
 
-macOS正式: ~/Library/Application Support/CherryStudio/logs/ | 开发: CherryStudioDev/logs/ | Windows: %APPDATA%/CherryStudio/logs/
+macOS正式: ~/Library/Application Support/Prism/logs/ | 开发: ~/Library/Application Support/PrismDev/logs/ | Windows: %APPDATA%/Prism/logs/
