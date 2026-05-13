@@ -231,3 +231,194 @@ export function clearAllSessions(): void {
   sessions.clear()
   logger.info('[MultiAgent] All sessions cleared')
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// [PRISM] 2026-05-13 — Sprint 7.5 / Sprint 3: Hermes Native Multi-Agent
+// ─────────────────────────────────────────────────────────────────────────────
+// Hermes Gateway (localhost:8642/v1) 原生会话管理
+// 与 OpenClaw Bridge 并列，作为独立的 Multi-Agent 引擎
+// 架构：Hermes orchestrator → 子 agent delegation (内置，通过 delegation config)
+// ═════════════════════════════════════════════════════════════════════════════
+
+const HERMES_GATEWAY = 'http://localhost:8642/v1'
+const HERMES_AUTH = 'prism-local-dev'
+
+export interface HermesMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  ts: string
+}
+
+export interface HermesSession {
+  id: string
+  label: string
+  model: string
+  messages: HermesMessage[]
+  status: 'idle' | 'streaming' | 'error'
+  streamingBuffer: string
+  personality?: string
+  createdAt: string
+}
+
+export type HermesEvent =
+  | { type: 'hermes_delta'; sessionId: string; text: string }
+  | { type: 'hermes_done'; sessionId: string; fullText: string }
+  | { type: 'hermes_error'; sessionId: string; error: string }
+
+export const hermesEmitter = new Emittery<{
+  hermes_delta: { sessionId: string; text: string }
+  hermes_done: { sessionId: string; fullText: string }
+  hermes_error: { sessionId: string; error: string }
+}>()
+
+const hermesSessions = new Map<string, HermesSession>()
+
+/**
+ * Create a new Hermes session with optional system prompt / personality.
+ */
+export function createHermesSession(
+  label: string,
+  options: { model?: string; personality?: string; systemPrompt?: string } = {}
+): HermesSession {
+  const id = `hermes-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const session: HermesSession = {
+    id,
+    label,
+    model: options.model ?? 'hermes-agent',
+    messages: options.systemPrompt
+      ? [{ role: 'system', content: options.systemPrompt, ts: new Date().toISOString() }]
+      : [],
+    status: 'idle',
+    streamingBuffer: '',
+    personality: options.personality,
+    createdAt: new Date().toISOString()
+  }
+  hermesSessions.set(id, session)
+  logger.info(`[Hermes] Session created: ${id} (${label})`)
+  return session
+}
+
+/**
+ * Send a message to Hermes and stream the response.
+ * Emits 'hermes_delta' events for each token, 'hermes_done' on completion.
+ */
+export async function hermesChat(sessionId: string, userMessage: string): Promise<void> {
+  const session = hermesSessions.get(sessionId)
+  if (!session) throw new Error(`Hermes session not found: ${sessionId}`)
+  if (session.status === 'streaming') throw new Error('Session is already streaming')
+
+  session.messages.push({ role: 'user', content: userMessage, ts: new Date().toISOString() })
+  session.status = 'streaming'
+  session.streamingBuffer = ''
+
+  const body = JSON.stringify({
+    model: session.model,
+    messages: session.messages.map(({ role, content }) => ({ role, content })),
+    max_tokens: 2048,
+    stream: true
+  })
+
+  try {
+    const response = await fetch(`${HERMES_GATEWAY}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HERMES_AUTH}`,
+        'Content-Type': 'application/json'
+      },
+      body,
+      signal: AbortSignal.timeout(120_000)
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errText.slice(0, 200)}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('No response body reader')
+
+    const decoder = new TextDecoder()
+    let fullText = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
+
+      for (const line of lines) {
+        const data = line.slice(6).trim()
+        if (data === '[DONE]') break
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed?.choices?.[0]?.delta?.content
+          if (delta) {
+            session.streamingBuffer += delta
+            fullText += delta
+            void hermesEmitter.emit('hermes_delta', { sessionId, text: delta })
+          }
+        } catch {
+          // ignore malformed SSE chunk
+        }
+      }
+    }
+
+    // Finalize
+    if (fullText) {
+      session.messages.push({ role: 'assistant', content: fullText, ts: new Date().toISOString() })
+    }
+    session.streamingBuffer = ''
+    session.status = 'idle'
+    void hermesEmitter.emit('hermes_done', { sessionId, fullText })
+    logger.info(`[Hermes] Session ${sessionId}: done (${fullText.length} chars)`)
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    session.status = 'error'
+    session.streamingBuffer = ''
+    void hermesEmitter.emit('hermes_error', { sessionId, error: errMsg })
+    logger.warn(`[Hermes] Session ${sessionId} error: ${errMsg}`)
+    throw err
+  }
+}
+
+/**
+ * One-shot Hermes call (no session history, fire-and-forget for simple tasks).
+ */
+export async function hermesOneShot(prompt: string, systemPrompt?: string): Promise<string> {
+  const messages: Array<{ role: string; content: string }> = []
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt })
+  messages.push({ role: 'user', content: prompt })
+
+  const response = await fetch(`${HERMES_GATEWAY}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${HERMES_AUTH}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ model: 'hermes-agent', messages, max_tokens: 1024 }),
+    signal: AbortSignal.timeout(60_000)
+  })
+
+  if (!response.ok) throw new Error(`Hermes HTTP ${response.status}`)
+  const data = await response.json()
+  return data?.choices?.[0]?.message?.content ?? ''
+}
+
+/** List all active Hermes sessions. */
+export function listHermesSessions(): HermesSession[] {
+  return [...hermesSessions.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+/** Get a Hermes session by ID. */
+export function getHermesSession(sessionId: string): HermesSession | undefined {
+  return hermesSessions.get(sessionId)
+}
+
+/** Remove a Hermes session. */
+export function closeHermesSession(sessionId: string): void {
+  hermesSessions.delete(sessionId)
+  logger.info(`[Hermes] Session closed: ${sessionId}`)
+}

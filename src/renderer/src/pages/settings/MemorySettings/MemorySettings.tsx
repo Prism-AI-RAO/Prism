@@ -37,6 +37,7 @@ import {
 } from '../index'
 import { DEFAULT_USER_ID } from './constants'
 import MemorySettingsModal from './MemorySettingsModal'
+import HermesEngineCard from './HermesEngineCard' // [PRISM] 2026-05-13 — Sprint 7.5
 import PrismMemoryOverview from './PrismMemoryOverview' // [PRISM] 2026-05-11 — Sprint 2-C
 import UserSelector from './UserSelector'
 
@@ -604,6 +605,9 @@ const MemorySettings = () => {
 
   return (
     <SettingContainer theme={theme}>
+      {/* [PRISM] 2026-05-13 — Sprint 7.5: Hermes Engine 状态卡 + SOUL 人格 */}
+      <HermesEngineCard theme={theme} />
+
       {/* [PRISM] 2026-05-11 — Sprint 2-C: Prism Memory Engine overview card */}
       <PrismMemoryOverview memoryCount={allMemories.length} theme={theme} />
 

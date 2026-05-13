@@ -473,5 +473,8 @@ export enum IpcChannel {
   Prism_Memory_WriteMemoryMd = 'prism:memory:write-memory-md',
   Prism_Memory_ReadUserMd = 'prism:memory:read-user-md',
   Prism_Memory_WriteUserMd = 'prism:memory:write-user-md',
-  Prism_Memory_GetStats = 'prism:memory:get-stats'
+  Prism_Memory_GetStats = 'prism:memory:get-stats',
+  // [PRISM] 2026-05-13 — Sprint 7.5: Hermes Engine IPC
+  Prism_Hermes_GetConfig = 'prism:hermes:get-config',
+  Prism_Hermes_SetPersonality = 'prism:hermes:set-personality'
 }

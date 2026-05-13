@@ -1241,6 +1241,46 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
     return prismMemoryFileService.getMemoryFileStats()
   })
 
+  // [PRISM] 2026-05-13 — Sprint 7.5: Hermes Engine IPC handlers
+  // 读取 ~/.hermes/config.yaml 中 Hermes 配置信息
+  ipcMain.handle(IpcChannel.Prism_Hermes_GetConfig, async () => {
+    const yaml = await import('yaml')
+    const configPath = path.join(osHomedir(), '.hermes', 'config.yaml')
+    try {
+      if (!fs.existsSync(configPath)) return { ok: false, error: 'config not found', config: null }
+      const raw = fs.readFileSync(configPath, 'utf-8')
+      const config = yaml.parse(raw)
+      return {
+        ok: true,
+        error: null,
+        config: {
+          model: config?.model ?? null,
+          personality: config?.display?.personality ?? null,
+          personalities: Object.keys(config?.agent?.personalities ?? {}),
+          customPersonalities: config?.personalities ?? {}
+        }
+      }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message, config: null }
+    }
+  })
+
+  // 写入 Hermes 人格设置到 ~/.hermes/config.yaml
+  ipcMain.handle(IpcChannel.Prism_Hermes_SetPersonality, async (_event, personality: string) => {
+    const yaml = await import('yaml')
+    const configPath = path.join(osHomedir(), '.hermes', 'config.yaml')
+    try {
+      const raw = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : ''
+      const config = yaml.parse(raw) ?? {}
+      if (!config.display) config.display = {}
+      config.display.personality = personality
+      fs.writeFileSync(configPath, yaml.stringify(config), 'utf-8')
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
   // WeChat
   ipcMain.handle(IpcChannel.WeChat_HasCredentials, async (_, channelId: string) => {
     const tokenPath = path.join(getDataPath('Channels'), `weixin_bot_${channelId}.json`)

@@ -905,6 +905,21 @@ const api = {
         userMdExists: boolean
         userMdSizeBytes: number | null
       }> => ipcRenderer.invoke(IpcChannel.Prism_Memory_GetStats)
+    },
+    // [PRISM] 2026-05-13 — Sprint 7.5: Hermes Engine API
+    hermes: {
+      getConfig: (): Promise<{
+        ok: boolean
+        error: string | null
+        config: {
+          model: string | null
+          personality: string | null
+          personalities: string[]
+          customPersonalities: Record<string, string>
+        } | null
+      }> => ipcRenderer.invoke(IpcChannel.Prism_Hermes_GetConfig),
+      setPersonality: (personality: string): Promise<{ ok: boolean; error?: string }> =>
+        ipcRenderer.invoke(IpcChannel.Prism_Hermes_SetPersonality, personality)
     }
   }
 }
