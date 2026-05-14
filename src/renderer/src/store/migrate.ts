@@ -3446,9 +3446,7 @@ const migrateConfig = {
       logger.error('migrate 207 error', error as Error)
       return state
     }
-  }
-}
-
+  },
   // [PRISM] 2026-05-14 — Sprint 14-C: 修复 @prism/memory 自动配置
   // 将占位符 MEMORY_FILE_PATH 清空（让 MemoryServer 使用默认路径），
   // 清除 shouldConfig 标志，更新 provider 为 PrismAI
