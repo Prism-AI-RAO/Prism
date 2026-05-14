@@ -505,15 +505,9 @@ export class SessionMessageService extends BaseService {
     }
     messages.push({ role: 'user', content: req.content })
 
-    // 3. Start streaming via ChatCompletionService
-    const { stream: openaiStream } = await chatCompletionService.processStreamingCompletion({
-      model,
-      messages,
-      stream: true as const
-    })
-
-    // 4. Convert AsyncIterable<ChatCompletionChunk> → ReadableStream<TextStreamPart>
-    // 直接跟踪全文（不用 TextStreamAccumulator，因为其 text-delta 语义与 OpenAI 增量流不匹配）
+    // 3 & 4. 立即返回 ReadableStream（非阻塞），API 调用在 start 内部异步执行
+    // 关键：不在此处 await processStreamingCompletion，否则 messages.ts 无法及时建立 SSE 连接，
+    // renderer 收不到 SSE 头，导致 fetch 挂起
     let fullText = ''
     const textBlockId = randomUUID()
 
@@ -546,9 +540,14 @@ export class SessionMessageService extends BaseService {
 
     const stream = new ReadableStream<TextStreamPart<Record<string, any>>>({
       start: async (controller) => {
-        // Emit text-start so UI knows a text block is opening
         controller.enqueue({ type: 'text-start', id: textBlockId } as TextStreamPart<Record<string, any>>)
         try {
+          // API 调用在 start 内部，不阻塞 startGenericAgentStream 的返回
+          const { stream: openaiStream } = await chatCompletionService.processStreamingCompletion({
+            model,
+            messages,
+            stream: true as const
+          })
           for await (const chunk of openaiStream) {
             if (abortController.signal.aborted) {
               controller.enqueue({ type: 'text-end', id: textBlockId } as TextStreamPart<Record<string, any>>)
@@ -571,6 +570,7 @@ export class SessionMessageService extends BaseService {
           controller.close()
           persistResult(fullText)
         } catch (error) {
+          logger.error('[PRISM] generic agent stream error', error as Error)
           controller.error(error)
           rejectCompletion(serializeError(error))
         }
