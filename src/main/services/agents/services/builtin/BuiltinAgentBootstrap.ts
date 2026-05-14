@@ -1,9 +1,8 @@
 /**
  * BuiltinAgentBootstrap
  *
- * Encapsulates all startup initialization logic for built-in skills and agents
- * (CherryClaw, Cherry Assistant, etc.). Keeps business details out of
- * the main entry point (`src/main/index.ts`).
+ * Encapsulates all startup initialization logic for built-in skills and agents.
+ * [PRISM] 2026-05-14 — Sprint 12: 重构为单一 Prism Main 架构，移除 CherryClaw + CherryAssistant
  */
 import { loggerService } from '@logger'
 import { installBuiltinSkills } from '@main/utils/builtinSkills'
@@ -12,7 +11,11 @@ import type { BuiltinAgentInitResult } from '../AgentService'
 import { agentService } from '../AgentService'
 import { schedulerService } from '../SchedulerService'
 import { sessionService } from '../SessionService'
-import { CHERRY_ASSISTANT_AGENT_ID, CHERRY_CLAW_AGENT_ID } from './BuiltinAgentIds'
+import {
+  LEGACY_CHERRY_ASSISTANT_AGENT_ID,
+  LEGACY_CHERRY_CLAW_AGENT_ID,
+  PRISM_MAIN_AGENT_ID
+} from './BuiltinAgentIds'
 import { provisionBuiltinAgent } from './BuiltinAgentProvisioner'
 
 const logger = loggerService.withContext('BuiltinAgentBootstrap')
@@ -23,18 +26,46 @@ const retryTimers = new Map<string, NodeJS.Timeout>()
 /**
  * Initialize all built-in skills and agents. Safe to call multiple times (idempotent).
  *
- * Skills are installed first (shared dependency). Agent inits run in parallel
- * since they operate on different rows and don't conflict.
+ * Execution order:
+ *   1. cleanupLegacyAgents — remove old CherryClaw / CherryAssistant from DB
+ *   2. installBuiltinSkills — install global skills (prism-guide etc.)
+ *   3. initPrismMain        — create/update the single Prism Main brain agent
  */
 export async function bootstrapBuiltinAgents(): Promise<void> {
+  // [PRISM] 2026-05-14 — Sprint 12: 清理旧内置 Agent，迁移至 Prism Main
+  await cleanupLegacyAgents()
+
   try {
     await installBuiltinSkills()
   } catch (error) {
     logger.error('Failed to install built-in skills', error as Error)
   }
 
-  await Promise.all([initCherryClaw(), initCherryAssistant()])
+  await initPrismMain()
 }
+
+// ── Legacy cleanup ───────────────────────────────────────────────────
+
+/**
+ * Force-remove old CherryClaw and CherryAssistant agents from the database.
+ * Safe to call when they don't exist (no-ops gracefully).
+ */
+async function cleanupLegacyAgents(): Promise<void> {
+  const legacyIds = [LEGACY_CHERRY_CLAW_AGENT_ID, LEGACY_CHERRY_ASSISTANT_AGENT_ID]
+  for (const id of legacyIds) {
+    try {
+      const deleted = await agentService.deleteAgent(id)
+      if (deleted) {
+        logger.info('[PRISM] Removed legacy built-in agent', { id })
+      }
+    } catch (error) {
+      // Agent doesn't exist or already removed — this is expected after first migration
+      logger.debug('[PRISM] Legacy agent cleanup skipped (not found or already removed)', { id, error })
+    }
+  }
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────
 
 function clearRetry(agentId: string): void {
   const timer = retryTimers.get(agentId)
@@ -103,34 +134,22 @@ async function handleInitResult(
   scheduleRetry(agentId, label, initFn)
 }
 
-// ── CherryClaw ──────────────────────────────────────────────────────
+// ── Prism Main ───────────────────────────────────────────────────────
 
-async function initCherryClaw(): Promise<void> {
+export { PRISM_MAIN_AGENT_ID }
+
+async function initPrismMain(): Promise<void> {
   try {
-    const result = await agentService.initDefaultCherryClawAgent()
-    await handleInitResult(CHERRY_CLAW_AGENT_ID, 'CherryClaw', result, initCherryClaw, async (agentId) => {
+    const result = await agentService.initBuiltinAgent({
+      id: PRISM_MAIN_AGENT_ID,
+      builtinRole: 'main',
+      agentType: 'claude-code',
+      provisionWorkspace: provisionBuiltinAgent
+    })
+    await handleInitResult(PRISM_MAIN_AGENT_ID, 'Prism Main', result, initPrismMain, async (agentId) => {
       await schedulerService.ensureHeartbeatTask(agentId, 30)
     })
   } catch (error) {
-    logger.warn('Failed to init CherryClaw agent:', error as Error)
-  }
-}
-
-// ── Cherry Assistant ────────────────────────────────────────────────
-
-export { CHERRY_ASSISTANT_AGENT_ID }
-
-async function initCherryAssistant(): Promise<void> {
-  try {
-    const result = await agentService.initBuiltinAgent({
-      id: CHERRY_ASSISTANT_AGENT_ID,
-      builtinRole: 'assistant',
-      // [PRISM] 2026-05-11 — Prism Assistant 使用 generic 类型，支持所有 Provider 模型（不限 Anthropic）
-      agentType: 'generic',
-      provisionWorkspace: provisionBuiltinAgent
-    })
-    await handleInitResult(CHERRY_ASSISTANT_AGENT_ID, 'Prism Assistant', result, initCherryAssistant)
-  } catch (error) {
-    logger.warn('Failed to init Prism Assistant agent:', error as Error)
+    logger.warn('Failed to init Prism Main agent:', error as Error)
   }
 }

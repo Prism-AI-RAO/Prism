@@ -30,18 +30,28 @@ function resolveLocalizedField(value: unknown): string | undefined {
 }
 
 const ROLE_TO_TEMPLATE: Record<string, string> = {
-  assistant: 'cherry-assistant',
+  main: 'prism-main', // [PRISM] 2026-05-14 — Sprint 12: Prism Main 是唯一的内置 Agent
+  assistant: 'cherry-assistant', // legacy, kept for reference
   'skill-creator': 'skill-creator'
 }
 
 /**
  * Recursively copy a directory, creating target dirs as needed.
  */
+// [PRISM] 2026-05-13 — Skips destination paths that are already symlinks so that
+// skills managed by the global skill system (linked via SkillService.linkSkill) are
+// not overwritten with real copies from the builtin-agent template.
 function copyDirSync(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true })
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const srcPath = path.join(src, entry.name)
     const destPath = path.join(dest, entry.name)
+    // Skip symlinks at the destination — managed by the global skill system
+    try {
+      if (fs.lstatSync(destPath).isSymbolicLink()) continue
+    } catch {
+      // Does not exist yet, proceed normally
+    }
     if (entry.isDirectory()) {
       copyDirSync(srcPath, destPath)
     } else {
@@ -97,6 +107,22 @@ export async function provisionBuiltinAgent(
         workspacePath,
         destClaudeDir
       })
+    }
+
+    // [PRISM] 2026-05-13 — Remove legacy cherry-assistant-guide skill from workspace.
+    // This skill was replaced by prism-guide. The copyDirSync above may have copied
+    // a nested cherry-assistant-guide/ directory from inside prism-guide/, or a previous
+    // version may have left a top-level cherry-assistant-guide/ in the workspace.
+    // We proactively delete both locations on every provision to ensure it never surfaces.
+    const legacySkillPaths = [
+      path.join(workspacePath, '.claude', 'skills', 'cherry-assistant-guide'),
+      path.join(workspacePath, '.claude', 'skills', 'prism-guide', 'cherry-assistant-guide')
+    ]
+    for (const legacyPath of legacySkillPaths) {
+      if (fs.existsSync(legacyPath)) {
+        fs.rmSync(legacyPath, { recursive: true })
+        logger.info('Removed legacy cherry-assistant-guide from workspace', { legacyPath })
+      }
     }
 
     // Read agent.json to extract full config

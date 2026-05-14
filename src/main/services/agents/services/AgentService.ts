@@ -25,7 +25,7 @@ import {
 } from '../database/schema'
 import type { AgentModelField } from '../errors'
 import { skillService } from '../skills/SkillService'
-import { CHERRY_CLAW_AGENT_ID, isBuiltinAgentId } from './builtin/BuiltinAgentIds'
+import { isBuiltinAgentId, PRISM_MAIN_AGENT_ID } from './builtin/BuiltinAgentIds' // [PRISM] 2026-05-14 — Sprint 12: 换用 PRISM_MAIN_AGENT_ID
 import { seedWorkspaceTemplates } from './cherryclaw/seedWorkspace'
 
 const logger = loggerService.withContext('AgentService')
@@ -35,7 +35,7 @@ export type BuiltinAgentInitResult =
   | { agentId: null; skippedReason: 'deleted' | 'no_model' }
 
 export class AgentService extends BaseService {
-  static readonly DEFAULT_AGENT_ID = CHERRY_CLAW_AGENT_ID
+  static readonly DEFAULT_AGENT_ID = PRISM_MAIN_AGENT_ID // [PRISM] 2026-05-14 — Sprint 12
 
   private static instance: AgentService | null = null
   private readonly modelFields: AgentModelField[] = ['model', 'plan_model', 'small_model']
