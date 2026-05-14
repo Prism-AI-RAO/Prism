@@ -143,7 +143,10 @@ async function initPrismMain(): Promise<void> {
     const result = await agentService.initBuiltinAgent({
       id: PRISM_MAIN_AGENT_ID,
       builtinRole: 'main',
-      agentType: 'claude-code',
+      // [PRISM] 2026-05-14 - Changed from claude-code to generic
+      // claude-code routes through Anthropic CLI (API key required).
+      // generic allows any configured provider (DeepSeek, etc.)
+      agentType: 'generic',
       provisionWorkspace: provisionBuiltinAgent
     })
     await handleInitResult(PRISM_MAIN_AGENT_ID, 'Prism Main', result, initPrismMain, async (agentId) => {
