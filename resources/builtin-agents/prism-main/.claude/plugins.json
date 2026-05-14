@@ -1,76 +1,174 @@
 {
-  "version": 1,
-  "lastUpdated": 1747152000000,
-  "plugins": [
-    {
-      "filename": "prism-guide",
-      "type": "skill",
-      "metadata": {
-        "sourcePath": "skills/prism-guide",
-        "filename": "prism-guide",
-        "name": "prism-guide",
-        "description": "Prism 产品知识库、源码路径索引、故障排查和页面导航。当用户询问 Prism 的功能、配置、报错、使用方法时触发。也适用于用户提到 provider、模型、知识库、Agent、MCP、OpenClaw、Hermes、PDF、快捷短语等关键词的场景。",
-        "category": "skills",
-        "type": "skill",
-        "size": 6921,
-        "contentHash": "prism-guide-v1"
-      }
-    },
-    {
-      "filename": "faq-collector",
-      "type": "skill",
-      "metadata": {
-        "sourcePath": "skills/faq-collector",
-        "filename": "faq-collector",
-        "name": "faq-collector",
-        "description": "将成功解决的用户问题收录到 FAQ 知识库。问题解决后自动判断是否收录。也可以在用户说\"收录到 FAQ\"、\"记录这个问题\"、\"add to FAQ\"时手动触发。",
-        "category": "skills",
-        "type": "skill",
-        "size": 1134,
-        "contentHash": "66f466c991a125d072dd242a87bb05ff1aee4bc7f7209ee70673004d10b887b3"
-      }
-    },
-    {
-      "filename": "issue-reporter",
-      "type": "skill",
-      "metadata": {
-        "sourcePath": "skills/issue-reporter",
-        "filename": "issue-reporter",
-        "name": "issue-reporter",
-        "description": "帮助用户提交 Bug Report 或 Feature Request。支持 GitHub Issue（有账户）和本地存档（无账户）两种模式。当诊断发现是代码 Bug 时主动提议，或当用户说\"帮我提 issue\"、\"这是个 bug\"、\"我想要这个功能\"、\"submit a bug\"、\"feature request\"时触发。",
-        "category": "skills",
-        "type": "skill",
-        "size": 1656,
-        "contentHash": "95725d616981ecf7276210d875b046c55883b570ff1eb712d910442014159125"
-      }
-    },
-    {
-      "filename": "skills-manager",
-      "type": "skill",
-      "metadata": {
-        "sourcePath": "skills/skills-manager",
-        "filename": "skills-manager",
-        "name": "skills-manager",
-        "description": "搜索、安装和创建 Claude Code Agent Skills。当用户想要搜索技能、安装工具、创建自定义 Skill，或者说\"find a skill\"、\"搜索技能\"、\"帮我做个 skill\"、\"create a skill\"时触发。也适用于用户说\"有没有做 X 的工具\"、\"我想扩展 Agent 能力\"的场景。",
-        "category": "skills",
-        "type": "skill",
-        "size": 1632,
-        "contentHash": "7aa285f334acf318b23ef0f1d3126cd5d55c2a47ad0daa360ddd7321dfc6e5c6"
-      }
-    },
-    {
-      "filename": "prism-control",
-      "type": "skill",
-      "metadata": {
-        "sourcePath": "skills/prism-control",
-        "filename": "prism-control",
-        "name": "prism-control",
-        "description": "系统总控操作手册 — 创建/管理 Agent、Prism API 完整参考、系统诊断。当需要创建新 Agent、调用 Prism API、诊断系统状态、管理服务时触发。",
-        "category": "skills",
-        "type": "skill",
-        "size": 4671,
-        "contentHash": "prism-control-v1"
-      }
-    }
-  ]
+    "version": 1,
+    "lastUpdated": 1778737904862,
+    "plugins": [
+        {
+            "filename": "prism-guide",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/prism-guide",
+                "filename": "prism-guide",
+                "name": "prism-guide",
+                "description": "Prism 产品知识库、源码路径索引、故障排查和页面导航。当用户询问 Prism 的功能、配置、报错、使用方法时触发。也适用于用户提到 provider、模型、知识库、Agent、MCP、OpenClaw、Hermes、PDF、快捷短语等关键词的场景。",
+                "category": "skills",
+                "type": "skill",
+                "size": 6921,
+                "contentHash": "prism-guide-v1"
+            }
+        },
+        {
+            "filename": "faq-collector",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/faq-collector",
+                "filename": "faq-collector",
+                "name": "faq-collector",
+                "description": "将成功解决的用户问题收录到 FAQ 知识库。问题解决后自动判断是否收录。也可以在用户说\"收录到 FAQ\"、\"记录这个问题\"、\"add to FAQ\"时手动触发。",
+                "category": "skills",
+                "type": "skill",
+                "size": 1134,
+                "contentHash": "66f466c991a125d072dd242a87bb05ff1aee4bc7f7209ee70673004d10b887b3"
+            }
+        },
+        {
+            "filename": "issue-reporter",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/issue-reporter",
+                "filename": "issue-reporter",
+                "name": "issue-reporter",
+                "description": "帮助用户提交 Bug Report 或 Feature Request。支持 GitHub Issue（有账户）和本地存档（无账户）两种模式。当诊断发现是代码 Bug 时主动提议，或当用户说\"帮我提 issue\"、\"这是个 bug\"、\"我想要这个功能\"、\"submit a bug\"、\"feature request\"时触发。",
+                "category": "skills",
+                "type": "skill",
+                "size": 1656,
+                "contentHash": "95725d616981ecf7276210d875b046c55883b570ff1eb712d910442014159125"
+            }
+        },
+        {
+            "filename": "skills-manager",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/skills-manager",
+                "filename": "skills-manager",
+                "name": "skills-manager",
+                "description": "搜索、安装和创建 Claude Code Agent Skills。当用户想要搜索技能、安装工具、创建自定义 Skill，或者说\"find a skill\"、\"搜索技能\"、\"帮我做个 skill\"、\"create a skill\"时触发。也适用于用户说\"有没有做 X 的工具\"、\"我想扩展 Agent 能力\"的场景。",
+                "category": "skills",
+                "type": "skill",
+                "size": 1632,
+                "contentHash": "7aa285f334acf318b23ef0f1d3126cd5d55c2a47ad0daa360ddd7321dfc6e5c6"
+            }
+        },
+        {
+            "filename": "prism-control",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/prism-control",
+                "filename": "prism-control",
+                "name": "prism-control",
+                "description": "系统总控操作手册 — 创建/管理 Agent、Prism API 完整参考、系统诊断。当需要创建新 Agent、调用 Prism API、诊断系统状态、管理服务时触发。",
+                "category": "skills",
+                "type": "skill",
+                "size": 4671,
+                "contentHash": "prism-control-v1"
+            }
+        },
+        {
+            "filename": "self-improving-agent",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/self-improving-agent",
+                "filename": "self-improving-agent",
+                "name": "self-improving-agent",
+                "description": "持续自我改进技能 — 捕获错误、用户纠正、知识缺口，自动记录到 .learnings/ 并按需晋升到项目记忆。当命令失败、用户纠正时触发。",
+                "category": "skills",
+                "type": "skill",
+                "size": 21606,
+                "contentHash": "6ef2c135267c1173b6b065f73be4aad7fb51acabc500a4fe64b6df846125ecb6"
+            }
+        },
+        {
+            "filename": "elite-longterm-memory",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/elite-longterm-memory",
+                "filename": "elite-longterm-memory",
+                "name": "elite-longterm-memory",
+                "description": "Elite 长期记忆系统 — WAL 协议 + 向量搜索 + git-notes。跨 Session 持久化上下文。触发词：记忆、记住、memory、别忘了、跨会话。",
+                "category": "skills",
+                "type": "skill",
+                "size": 12723,
+                "contentHash": "56bb341604f951985e451df450744d1d78cd9ba905b6df8952084343b35a95b3"
+            }
+        },
+        {
+            "filename": "multi-search-engine",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/multi-search-engine",
+                "filename": "multi-search-engine",
+                "name": "multi-search-engine",
+                "description": "多搜索引擎集成 — 16 个引擎（7 中文 + 9 全球），支持高级操作符、时间过滤、站内搜索、隐私引擎、WolframAlpha。无需 API Key。",
+                "category": "skills",
+                "type": "skill",
+                "size": 6203,
+                "contentHash": "a089b7928eeff57cc50dfa87cfe6f630f227dafc3ed7f92af043b7edb0866796"
+            }
+        },
+        {
+            "filename": "markdown-converter",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/markdown-converter",
+                "filename": "markdown-converter",
+                "name": "markdown-converter",
+                "description": "文档转 Markdown — 支持 PDF、Word、PPT、Excel、HTML、CSV、JSON、XML、图片（OCR）、音频（转录）、YouTube URL。用于 LLM 处理或文本分析。",
+                "category": "skills",
+                "type": "skill",
+                "size": 1968,
+                "contentHash": "354b8335051b9037e8c23324c33f68b3abbdac5ab9cfa12935c26b53575cf488"
+            }
+        },
+        {
+            "filename": "sql-toolkit",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/sql-toolkit",
+                "filename": "sql-toolkit",
+                "name": "sql-toolkit",
+                "description": "SQL 全套工具 — 查询、设计、迁移、优化 SQLite/PostgreSQL/MySQL。Schema 设计、写查询、创建迁移、索引、备份/还原、慢查询调试。",
+                "category": "skills",
+                "type": "skill",
+                "size": 12080,
+                "contentHash": "515ecf904449a3cd5ebb92e85e54127e216d9483ee9111705e75e686a0694285"
+            }
+        },
+        {
+            "filename": "36kr-ainotes",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/36kr-ainotes",
+                "filename": "36kr-ainotes",
+                "name": "36kr-ainotes",
+                "description": "36氪 AI 测评笔记 — 获取每日最新 AI 产品测评内容。触发词：36kr测评、AI测评笔记、今日AI测评、查测评内容、有哪些AI产品被测评了。",
+                "category": "skills",
+                "type": "skill",
+                "size": 8097,
+                "contentHash": "1098fffc23a1ceb57d597174d6de062060d4c05d763bbd26936d682ffe7d6554"
+            }
+        },
+        {
+            "filename": "matrix-self-evolution",
+            "type": "skill",
+            "metadata": {
+                "sourcePath": "skills/matrix-self-evolution",
+                "filename": "matrix-self-evolution",
+                "name": "matrix-self-evolution",
+                "description": "Matrix 系统自进化技能 — Prism 专属，负责系统自我升级、Sprint 规划、新 Agent 创建决策、架构演进。当需要规划 Sprint 或系统升级时触发。",
+                "category": "skills",
+                "type": "skill",
+                "size": 4021,
+                "contentHash": "d9dde338685e6196b8572045d05bdd72b970ee1a62fb637c9d859267d80c34f4"
+            }
+        }
+    ]
 }
