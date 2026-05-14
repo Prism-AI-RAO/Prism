@@ -20,6 +20,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Base64ImageSource, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 import { loggerService } from '@logger'
 import { config as apiConfigService } from '@main/apiServer/config'
+import { apiServer } from '@main/apiServer/server' // [PRISM] 2026-05-14 — Sprint 11-C Option B: 用于检测 Prism API Server 是否运行
 import { validateModelId } from '@main/apiServer/utils'
 import { isWin } from '@main/constant'
 import AssistantServer from '@main/mcpServers/assistant'
@@ -197,18 +198,28 @@ class ClaudeCodeService implements AgentServiceInterface {
     const anthropicBaseUrl = resolveAnthropicBaseUrl()
     const sdkModelId = withDeepSeek1mSuffix(modelInfo.modelId, provider.anthropicApiHost)
 
+    // [PRISM] 2026-05-14 — Sprint 11-C Option B: 当 Prism API Server 运行时，通过它代理 Agent 请求
+    // 这样 Agent SDK 不需要直接持有 provider 的 API Key，统一走 Prism 网关，便于审计和轮换密钥
+    const usePrismProxy = apiServer.isRunning()
+
     const env = {
       ...loginShellEnv,
       ...getProxyEnvironment(process.env),
       // prevent claude agent sdk using bedrock api
       CLAUDE_CODE_USE_BEDROCK: '0',
-      // TODO: fix the proxy api server
-      // ANTHROPIC_API_KEY: apiConfig.apiKey,
-      // ANTHROPIC_AUTH_TOKEN: apiConfig.apiKey,
-      // ANTHROPIC_BASE_URL: `http://${apiConfig.host}:${apiConfig.port}/${modelInfo.provider.id}`,
-      ANTHROPIC_API_KEY: provider.apiKey,
-      ANTHROPIC_AUTH_TOKEN: provider.apiKey,
-      ANTHROPIC_BASE_URL: anthropicBaseUrl,
+      ...(usePrismProxy
+        ? {
+            // Route through Prism API Server: SDK calls http://{host}:{port}/{providerId}/v1/messages
+            ANTHROPIC_API_KEY: apiConfig.apiKey,
+            ANTHROPIC_AUTH_TOKEN: apiConfig.apiKey,
+            ANTHROPIC_BASE_URL: `http://${apiConfig.host}:${apiConfig.port}/${provider.id}`
+          }
+        : {
+            // Direct connection to provider (fallback when Prism API Server is not running)
+            ANTHROPIC_API_KEY: provider.apiKey,
+            ANTHROPIC_AUTH_TOKEN: provider.apiKey,
+            ANTHROPIC_BASE_URL: anthropicBaseUrl
+          }),
       ANTHROPIC_MODEL: sdkModelId,
       ANTHROPIC_DEFAULT_OPUS_MODEL: sdkModelId,
       ANTHROPIC_DEFAULT_SONNET_MODEL: sdkModelId,
