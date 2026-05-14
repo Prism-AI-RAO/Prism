@@ -208,8 +208,11 @@ export const patchSession = async (req: Request, res: Response): Promise<Respons
       })
     }
 
-    const updateSession = { ...existingSession, ...req.body }
-    const session = await sessionService.updateSession(agentId, sessionId, updateSession)
+    // [PRISM] 2026-05-14 — 只传 req.body（不 spread existingSession）
+    // 原因：spread existingSession 会把 accessible_paths:[] 带入 update，
+    // 导致 validateUpdate 误判"empty paths"而抛出错误。
+    // updateSession service 自己会 lookup existing session，无需在此重传全量字段。
+    const session = await sessionService.updateSession(agentId, sessionId, req.body)
 
     if (!session) {
       logger.warn('Session missing while patching', { agentId, sessionId })

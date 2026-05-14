@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import { loggerService } from '@logger'
+// [PRISM] 2026-05-14 — generic 类型通过 ChatCompletionService 路由，不经 Claude Code SDK
+import OpenAI from '@cherrystudio/openai'
+import { chatCompletionService } from '@main/apiServer/services/chat-completion'
+import { getAvailableProviders } from '@main/apiServer/utils'
 import type {
   AgentPersistedMessage,
   AgentSessionMessageEntity,
@@ -183,6 +187,12 @@ export class SessionMessageService extends BaseService {
   ): Promise<SessionStreamResult> {
     const agentSessionId = await this.getLastAgentSessionId(session.id)
     logger.debug('Session Message stream message data:', { message: req, session_id: agentSessionId })
+
+    // [PRISM] 2026-05-14 — generic 类型走 ChatCompletionService，不使用 Claude Code SDK
+    // 原因：generic Agent 使用任意 Provider（非 Anthropic），通过 Prism API Server 路由
+    if (session.agent_type === 'generic') {
+      return await this.startGenericAgentStream(session, req, abortController, agentSessionId, options)
+    }
 
     const claudeStream = await claudeCodeService.invoke(
       req.content,
@@ -428,6 +438,153 @@ export class SessionMessageService extends BaseService {
 
     return result
   }
+
+  // ─── [PRISM] generic Agent 聊天路径 ─────────────────────────────────────────
+
+  /**
+   * 解析 generic agent 使用的模型 ID。
+   * 若 session.model 已是 "providerId:modelId" 格式则直接使用；
+   * 否则自动回落到第一个已配置 Provider 的第一个模型。
+   */
+  private async resolveGenericModel(sessionModel: string | null | undefined): Promise<string> {
+    if (sessionModel && sessionModel.includes(':')) {
+      return sessionModel
+    }
+    const providers = await getAvailableProviders()
+    if (providers.length === 0) {
+      throw new Error('No AI providers configured. Go to Settings → Models to add a provider.')
+    }
+    const provider = providers[0]
+    const model = provider.models?.[0]
+    if (!model) {
+      throw new Error(`Provider "${provider.name}" has no models. Add models in Settings → Models.`)
+    }
+    const resolved = `${provider.id}:${model.id}`
+    logger.info('[PRISM] generic agent model fallback resolved', { original: sessionModel, resolved })
+    return resolved
+  }
+
+  /**
+   * 从消息 blocks 中提取纯文本（取 main_text 类型块拼接）。
+   */
+  private extractTextFromBlocks(blocks: Array<{ type: string; content?: string }>): string {
+    return blocks
+      .filter((b) => b.type === 'main_text')
+      .map((b) => b.content ?? '')
+      .join('\n')
+      .trim()
+  }
+
+  /**
+   * generic 类型 Agent 的流式消息处理。
+   * 使用 ChatCompletionService（OpenAI 兼容接口）替代 Claude Code SDK，
+   * 支持任意已配置的 Provider（LM Studio、DeepSeek、Ollama 等）。
+   */
+  private async startGenericAgentStream(
+    session: GetAgentSessionResponse,
+    req: CreateSessionMessageRequest,
+    abortController: AbortController,
+    agentSessionId: string,
+    options?: CreateMessageOptions
+  ): Promise<SessionStreamResult> {
+    // 1. Resolve model
+    const model = await this.resolveGenericModel(session.model)
+    logger.info('[PRISM] generic agent stream', { sessionId: session.id, model })
+
+    // 2. Build OpenAI-compatible messages array
+    const systemPrompt = session.instructions || 'You are a helpful assistant.'
+    const history = await agentMessageRepository.getSessionHistory(session.id)
+
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }]
+    for (const msg of history) {
+      const text = this.extractTextFromBlocks(msg.blocks as Array<{ type: string; content?: string }>)
+      if (text) {
+        const role = msg.message.role === 'user' ? 'user' : 'assistant'
+        messages.push({ role, content: text })
+      }
+    }
+    messages.push({ role: 'user', content: req.content })
+
+    // 3. Start streaming via ChatCompletionService
+    const { stream: openaiStream } = await chatCompletionService.processStreamingCompletion({
+      model,
+      messages,
+      stream: true as const
+    })
+
+    // 4. Convert AsyncIterable<ChatCompletionChunk> → ReadableStream<TextStreamPart>
+    // 直接跟踪全文（不用 TextStreamAccumulator，因为其 text-delta 语义与 OpenAI 增量流不匹配）
+    let fullText = ''
+    const textBlockId = randomUUID()
+
+    let resolveCompletion!: (value: {
+      userMessage?: AgentSessionMessageEntity
+      assistantMessage?: AgentSessionMessageEntity
+    }) => void
+    let rejectCompletion!: (reason?: unknown) => void
+
+    const completion = new Promise<{
+      userMessage?: AgentSessionMessageEntity
+      assistantMessage?: AgentSessionMessageEntity
+    }>((resolve, reject) => {
+      resolveCompletion = resolve
+      rejectCompletion = reject
+    })
+
+    const persistResult = (text: string) => {
+      if (!options?.persist || !text) {
+        resolveCompletion({})
+        return
+      }
+      this.persistHeadlessExchange(session, options.displayContent ?? req.content, text, agentSessionId, options.images)
+        .then(resolveCompletion)
+        .catch((err) => {
+          logger.error('[PRISM] Failed to persist generic exchange', err as Error)
+          resolveCompletion({})
+        })
+    }
+
+    const stream = new ReadableStream<TextStreamPart<Record<string, any>>>({
+      start: async (controller) => {
+        // Emit text-start so UI knows a text block is opening
+        controller.enqueue({ type: 'text-start', id: textBlockId } as TextStreamPart<Record<string, any>>)
+        try {
+          for await (const chunk of openaiStream) {
+            if (abortController.signal.aborted) {
+              controller.enqueue({ type: 'text-end', id: textBlockId } as TextStreamPart<Record<string, any>>)
+              controller.close()
+              persistResult(fullText)
+              return
+            }
+            const delta = chunk.choices[0]?.delta?.content
+            if (delta) {
+              fullText += delta
+              controller.enqueue({
+                type: 'text-delta',
+                id: textBlockId,
+                text: delta
+              } as TextStreamPart<Record<string, any>>)
+            }
+          }
+          // Stream complete
+          controller.enqueue({ type: 'text-end', id: textBlockId } as TextStreamPart<Record<string, any>>)
+          controller.close()
+          persistResult(fullText)
+        } catch (error) {
+          controller.error(error)
+          rejectCompletion(serializeError(error))
+        }
+      },
+      cancel: () => {
+        abortController.abort('stream cancelled')
+        resolveCompletion({})
+      }
+    })
+
+    return { stream, completion }
+  }
+
+  // ─── End [PRISM] generic Agent 聊天路径 ──────────────────────────────────────
 
   private async getLastAgentSessionId(sessionId: string): Promise<string> {
     try {
