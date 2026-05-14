@@ -86,7 +86,7 @@ const persistedReducer = persistReducer(
   {
     key: 'cherry-studio',
     storage,
-    version: 207, // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑 migrate 207
+    version: 208, // [PRISM] 2026-05-14 — Sprint 14-C: @prism/memory 自动配置 migrate 208
     blacklist: ['runtime', 'messages', 'messageBlocks', 'tabs', 'toolPermissions'],
     migrate
   },

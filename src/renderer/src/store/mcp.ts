@@ -138,11 +138,12 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
     reference: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
     type: 'inMemory',
     isActive: true,
+    // [PRISM] 2026-05-14 — Sprint 14-C: 空字符串让 MemoryServer 使用默认路径
+    // (~/.cherrystudio/config/memory.json)，无需用户手动配置
     env: {
-      MEMORY_FILE_PATH: 'YOUR_MEMORY_FILE_PATH'
+      MEMORY_FILE_PATH: ''
     },
-    shouldConfig: true,
-    provider: 'CherryAI',
+    provider: 'PrismAI',
     installSource: 'builtin',
     isTrusted: true
   },
@@ -244,18 +245,8 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
     installSource: 'builtin',
     isTrusted: true
   },
-  // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
-  // 自动启用的内置记忆 MCP 服务器，AI 助手可通过 prism_memory_* 工具跨会话记住用户信息
-  {
-    id: nanoid(),
-    name: BuiltinMCPServerNames.prismMemory,
-    type: 'inMemory',
-    isActive: true,
-    provider: 'PrismAI',
-    installSource: 'builtin',
-    isTrusted: true
-  },
   // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
+  // NOTE: prismMemory (@prism/memory) 条目已合并入上方 memory 条目（同名，Sprint 14-C 清理）
   // 将 Hermes 长期记忆能力注入全系统所有 Agent（hermes_context_get / write / search）
   {
     id: nanoid(),

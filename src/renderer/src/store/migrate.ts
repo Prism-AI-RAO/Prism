@@ -3449,6 +3449,39 @@ const migrateConfig = {
   }
 }
 
+  // [PRISM] 2026-05-14 — Sprint 14-C: 修复 @prism/memory 自动配置
+  // 将占位符 MEMORY_FILE_PATH 清空（让 MemoryServer 使用默认路径），
+  // 清除 shouldConfig 标志，更新 provider 为 PrismAI
+  '208': (state: RootState) => {
+    try {
+      if (state.mcp?.servers) {
+        state.mcp.servers = state.mcp.servers.map((server: any) => {
+          if (server.name === '@prism/memory') {
+            return {
+              ...server,
+              provider: 'PrismAI',
+              shouldConfig: false,
+              isActive: true,
+              env: {
+                ...server.env,
+                MEMORY_FILE_PATH: server.env?.MEMORY_FILE_PATH === 'YOUR_MEMORY_FILE_PATH'
+                  ? ''
+                  : (server.env?.MEMORY_FILE_PATH ?? '')
+              }
+            }
+          }
+          return server
+        })
+      }
+      logger.info('migrate 208 success — auto-configured @prism/memory (cleared MEMORY_FILE_PATH placeholder)')
+      return state
+    } catch (error) {
+      logger.error('migrate 208 error', error as Error)
+      return state
+    }
+  }
+}
+
 // 注意：添加新迁移时，记得同时更新 persistReducer
 // file://./index.ts
 

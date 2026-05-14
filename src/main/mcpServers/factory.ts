@@ -12,7 +12,8 @@ import FileSystemServer from './filesystem'
 import { resolveFilesystemBaseDir } from './filesystem/config'
 import HubServer from './hub'
 import MemoryServer from './memory'
-import PrismMemoryServer from './prismMemory' // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
+// [PRISM] 2026-05-14 — Sprint 14-C: PrismMemoryServer 已停用（与 MemoryServer 同名 @prism/memory，dead code）
+// prismMemory.ts 保留备用；factory 仅用 MemoryServer 处理 @prism/memory
 import HermesMemoryServer from './hermesMemory' // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
 import PythonServer from './python'
 import ThinkingServer from './sequentialthinking'
@@ -59,9 +60,9 @@ export function createInMemoryMCPServer(
     case BuiltinMCPServerNames.hub: {
       return new HubServer().server
     }
-    case BuiltinMCPServerNames.prismMemory: { // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
-      return new PrismMemoryServer().server
-    }
+    // [PRISM] 2026-05-14 — Sprint 14-C: prismMemory case 已移除
+    // BuiltinMCPServerNames.prismMemory === '@prism/memory' === BuiltinMCPServerNames.memory
+    // 两个 case 同值，prismMemory case 永远是 dead code，已合并到上方 memory case
     case BuiltinMCPServerNames.hermesMemory: { // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
       return new HermesMemoryServer().server
     }
