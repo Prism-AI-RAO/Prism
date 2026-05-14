@@ -54,12 +54,16 @@ export class ChatCompletionService {
 
     const provider = modelValidation.provider!
 
-    if (provider.type !== 'openai') {
+    // [PRISM] 2026-05-14 — Sprint 11-B: 扩展 chat/completions 支持范围
+    // 原先只支持 openai 类型，现在扩展为支持所有主流类型：
+    // openai / anthropic（OpenAI 兼容端点）/ ollama / new-api
+    const supportedChatTypes = ['openai', 'anthropic', 'ollama', 'new-api']
+    if (!supportedChatTypes.includes(provider.type)) {
       return {
         ok: false,
         error: {
           type: 'unsupported_provider_type',
-          message: `Provider '${provider.id}' of type '${provider.type}' is not supported for OpenAI chat completions`,
+          message: `Provider '${provider.id}' of type '${provider.type}' is not supported for chat completions. Supported types: ${supportedChatTypes.join(', ')}`,
           code: 'unsupported_provider_type'
         }
       }
@@ -71,9 +75,17 @@ export class ChatCompletionService {
     // Matches the main-process convention in OpenClawService.
     const apiKey = provider.apiKey ? provider.apiKey.split(',')[0].trim() : ''
 
+    // [PRISM] 2026-05-14 — Sprint 11-B: Anthropic 需要额外 header
+    // Anthropic 的 OpenAI 兼容端点（/v1/chat/completions）要求 anthropic-version header
+    const defaultHeaders: Record<string, string> = {}
+    if (provider.type === 'anthropic') {
+      defaultHeaders['anthropic-version'] = '2023-06-01'
+    }
+
     const client = new OpenAI({
       baseURL: provider.apiHost,
-      apiKey
+      apiKey,
+      ...(Object.keys(defaultHeaders).length > 0 ? { defaultHeaders } : {})
     })
 
     return {
