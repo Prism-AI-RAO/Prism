@@ -18,7 +18,7 @@ export class BrowserServer {
   constructor() {
     this.mcpServer = new McpServer(
       {
-        name: '@cherry/browser',
+        name: '@prism/browser', // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑
         version: '0.1.0'
       },
       {

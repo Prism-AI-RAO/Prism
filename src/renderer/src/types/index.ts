@@ -853,19 +853,19 @@ export const isBuiltinMCPServer = (server: MCPServer): server is BuiltinMCPServe
 }
 
 export const BuiltinMCPServerNames = {
-  flomo: '@cherry/flomo',
-  mcpAutoInstall: '@cherry/mcp-auto-install',
-  memory: '@cherry/memory',
-  sequentialThinking: '@cherry/sequentialthinking',
-  braveSearch: '@cherry/brave-search',
-  fetch: '@cherry/fetch',
-  filesystem: '@cherry/filesystem',
-  difyKnowledge: '@cherry/dify-knowledge',
-  python: '@cherry/python',
-  didiMCP: '@cherry/didi-mcp',
-  browser: '@cherry/browser',
-  nowledgeMem: '@cherry/nowledge-mem',
-  hub: '@cherry/hub',
+  flomo: '@prism/flomo', // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑 @cherry → @prism
+  mcpAutoInstall: '@prism/mcp-auto-install', // [PRISM] 2026-05-14
+  memory: '@prism/memory', // [PRISM] 2026-05-14 (was @cherry/memory, now unified with prismMemory)
+  sequentialThinking: '@prism/sequentialthinking', // [PRISM] 2026-05-14
+  braveSearch: '@prism/brave-search', // [PRISM] 2026-05-14
+  fetch: '@prism/fetch', // [PRISM] 2026-05-14
+  filesystem: '@prism/filesystem', // [PRISM] 2026-05-14
+  difyKnowledge: '@prism/dify-knowledge', // [PRISM] 2026-05-14
+  python: '@prism/python', // [PRISM] 2026-05-14
+  didiMCP: '@prism/didi-mcp', // [PRISM] 2026-05-14
+  browser: '@prism/browser', // [PRISM] 2026-05-14
+  nowledgeMem: '@prism/nowledge-mem', // [PRISM] 2026-05-14
+  hub: '@prism/hub', // [PRISM] 2026-05-14
   prismMemory: '@prism/memory', // [PRISM] 2026-05-10 — Sprint 2: Hermes 记忆层集成
   hermesMemory: '@prism/hermes-memory' // [PRISM] 2026-05-14 — Sprint 10-A: Hermes 记忆引擎全局 MCP
 } as const

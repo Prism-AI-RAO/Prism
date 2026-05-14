@@ -213,7 +213,7 @@ export const builtinMCPServers: BuiltinMCPServer[] = [
   },
   {
     id: nanoid(),
-    name: '@cherry/didi-mcp',
+    name: '@prism/didi-mcp', // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑
     reference: 'https://mcp.didichuxing.com/',
     type: 'inMemory',
     isActive: false,

@@ -3412,6 +3412,40 @@ const migrateConfig = {
       logger.error('migrate 206 error', error as Error)
       return state
     }
+  },
+  // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑，将所有内置 MCP 服务器名从 @cherry/ 改为 @prism/
+  '207': (state: RootState) => {
+    try {
+      const cherryToPrism: Record<string, string> = {
+        '@cherry/flomo': '@prism/flomo',
+        '@cherry/mcp-auto-install': '@prism/mcp-auto-install',
+        '@cherry/memory': '@prism/memory',
+        '@cherry/sequentialthinking': '@prism/sequentialthinking',
+        '@cherry/brave-search': '@prism/brave-search',
+        '@cherry/fetch': '@prism/fetch',
+        '@cherry/filesystem': '@prism/filesystem',
+        '@cherry/dify-knowledge': '@prism/dify-knowledge',
+        '@cherry/python': '@prism/python',
+        '@cherry/didi-mcp': '@prism/didi-mcp',
+        '@cherry/browser': '@prism/browser',
+        '@cherry/nowledge-mem': '@prism/nowledge-mem',
+        '@cherry/hub': '@prism/hub'
+      }
+      if (state.mcp?.servers) {
+        state.mcp.servers = state.mcp.servers.map((server: any) => {
+          const newName = cherryToPrism[server.name]
+          if (newName) {
+            return { ...server, name: newName }
+          }
+          return server
+        })
+      }
+      logger.info('migrate 207 success — renamed @cherry/* MCP servers to @prism/*')
+      return state
+    } catch (error) {
+      logger.error('migrate 207 error', error as Error)
+      return state
+    }
   }
 }
 

@@ -64,7 +64,7 @@ class DifyKnowledgeServer {
     }
     this.server = new Server(
       {
-        name: '@cherry/dify-knowledge-server',
+        name: '@prism/dify-knowledge-server', // [PRISM] 2026-05-14 — Sprint 14: 品牌重塑
         version: '0.1.0'
       },
       {
