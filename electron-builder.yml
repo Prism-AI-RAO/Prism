@@ -121,6 +121,19 @@ mac:
     - target: zip
 dmg:
   writeUpdateInfo: false
+  # [PRISM] 2026-05-14 — Sprint 14-B: 品牌化 DMG 窗口（660×400，深色渐变背景）
+  background: prism-install/assets/dmg-background.png
+  window:
+    width: 660
+    height: 400
+  contents:
+    - x: 165
+      y: 200
+      type: file
+    - x: 495
+      y: 200
+      type: link
+      path: /Applications
 linux:
   artifactName: ${productName}-${version}-${arch}.${ext}
   executableName: CherryStudio

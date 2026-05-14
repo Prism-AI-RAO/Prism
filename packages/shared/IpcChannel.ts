@@ -422,6 +422,8 @@ export enum IpcChannel {
   Skill_ReadFile = 'skill:read-file',
   Skill_ListFiles = 'skill:list-files',
   Skill_ListLocal = 'skill:list-local',
+  // [PRISM] 2026-05-13 — 添加删除本地技能的 IPC 通道
+  Skill_RemoveLocal = 'skill:remove-local',
 
   // Local Transfer
   LocalTransfer_ListServices = 'local-transfer:list',

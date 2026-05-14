@@ -781,7 +781,10 @@ const api = {
     listFiles: (skillId: string): Promise<SkillResult<SkillFileNode[]>> =>
       ipcRenderer.invoke(IpcChannel.Skill_ListFiles, skillId),
     listLocal: (workdir: string): Promise<SkillResult<LocalSkill[]>> =>
-      ipcRenderer.invoke(IpcChannel.Skill_ListLocal, workdir)
+      ipcRenderer.invoke(IpcChannel.Skill_ListLocal, workdir),
+    // [PRISM] 2026-05-13 — 删除本地技能
+    removeLocal: (workdir: string, filename: string): Promise<SkillResult<void>> =>
+      ipcRenderer.invoke(IpcChannel.Skill_RemoveLocal, workdir, filename)
   },
   localTransfer: {
     getState: (): Promise<LocalTransferState> => ipcRenderer.invoke(IpcChannel.LocalTransfer_ListServices),

@@ -1156,6 +1156,18 @@ export async function registerIpc(mainWindow: BrowserWindow, app: Electron.App) 
     }
   })
 
+  // [PRISM] 2026-05-13 — 删除本地技能目录
+  ipcMain.handle(IpcChannel.Skill_RemoveLocal, async (_, workdir: string, filename: string) => {
+    try {
+      if (!workdir || !filename) return { success: false, error: 'Invalid arguments' }
+      await skillService.removeLocal(workdir, filename)
+      return { success: true }
+    } catch (error) {
+      logger.error('Failed to remove local skill', { workdir, filename, error })
+      return { success: false, error }
+    }
+  })
+
   ipcMain.handle(IpcChannel.LocalTransfer_ListServices, () => localTransferService.getState())
   ipcMain.handle(IpcChannel.LocalTransfer_StartScan, () => localTransferService.startDiscovery({ resetList: true }))
   ipcMain.handle(IpcChannel.LocalTransfer_StopScan, () => localTransferService.stopDiscovery())

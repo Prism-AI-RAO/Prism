@@ -364,6 +364,15 @@ export class SkillService {
     return this.installSkillDir(directoryPath, 'local', null)
   }
 
+  // [PRISM] 2026-05-13 — 删除 agent workspace 中的本地技能目录
+  async removeLocal(workdir: string, filename: string): Promise<void> {
+    const safeName = path.basename(filename)
+    if (!safeName || safeName.startsWith('.')) throw new Error('Invalid skill filename')
+    const skillPath = path.join(workdir, '.claude', 'skills', safeName)
+    await fs.promises.rm(skillPath, { recursive: true, force: true })
+    logger.info('Local skill removed', { workdir, filename: safeName })
+  }
+
   /**
    * List local skills from an agent workdir's .claude/skills/ directory.
    */
@@ -406,15 +415,19 @@ export class SkillService {
       // Ensure .claude/skills/ directory exists
       await fs.promises.mkdir(path.dirname(linkPath), { recursive: true })
 
-      // Remove existing symlink if present; refuse to overwrite real directories
-      // to avoid destroying user-authored content.
+      // Remove existing symlink if present.
+      // [PRISM] 2026-05-13 — Also replace real directories: when a skill is promoted
+      // from workspace-local (copyDirSync copy) to a global builtin (symlinked from
+      // global storage), the real directory must be removed so the symlink can be
+      // created. This is safe because builtin skill directories are Prism-managed
+      // copies, not user-authored content.
       try {
         const stat = await fs.promises.lstat(linkPath)
         if (stat.isSymbolicLink()) {
           await fs.promises.rm(linkPath)
         } else if (stat.isDirectory()) {
-          logger.warn('Refusing to overwrite non-symlink directory for skill', { folderName, linkPath })
-          return
+          await fs.promises.rm(linkPath, { recursive: true })
+          logger.info('Replaced real skill directory with symlink', { folderName, linkPath })
         }
       } catch {
         // Does not exist, fine

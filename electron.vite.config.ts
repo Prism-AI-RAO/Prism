@@ -37,7 +37,9 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['bufferutil', 'utf-8-validate', 'electron', 'moment', ...Object.keys(pkg.dependencies)],
+        // [PRISM] 2026-05-12 — iconv-lite 在 pnpm hoisting 下无法被 electron-builder 打包进 asar，
+        // 改为从 externals 排除，让 rollup 将其内联 bundle 到 out/main/index.js
+        external: ['bufferutil', 'utf-8-validate', 'electron', 'moment', ...Object.keys(pkg.dependencies).filter(dep => dep !== 'iconv-lite')],
         output: {
           manualChunks: undefined, // 彻底禁用代码分割 - 返回 null 强制单文件打包
           inlineDynamicImports: true // 内联所有动态导入，这是关键配置

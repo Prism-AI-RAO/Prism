@@ -3477,6 +3477,25 @@ const migrateConfig = {
       logger.error('migrate 208 error', error as Error)
       return state
     }
+  },
+  // [PRISM] 2026-05-14 — Sprint 14 rebrand: 将所有内置 MCP 服务器的 provider 从 CherryAI 改为 PrismAI
+  // 第三方服务器（flomo / Nowledge）保持原有 provider 不变
+  '209': (state: RootState) => {
+    try {
+      if (state.mcp?.servers) {
+        state.mcp.servers = state.mcp.servers.map((server: any) => {
+          if (server.provider === 'CherryAI') {
+            return { ...server, provider: 'PrismAI' }
+          }
+          return server
+        })
+      }
+      logger.info('migrate 209 success — rebranded all CherryAI providers to PrismAI')
+      return state
+    } catch (error) {
+      logger.error('migrate 209 error', error as Error)
+      return state
+    }
   }
 }
 

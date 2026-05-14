@@ -2,8 +2,8 @@ import CollapsibleSearchBar from '@renderer/components/CollapsibleSearchBar'
 import { TopView } from '@renderer/components/TopView'
 import { useInstalledSkills } from '@renderer/hooks/useSkills'
 import type { InstalledSkill, LocalSkill } from '@types'
-import { Button, Card, type CardProps, Empty, Spin, Switch, Tag } from 'antd'
-import { Plus, Puzzle } from 'lucide-react'
+import { Button, Card, type CardProps, Empty, Popconfirm, Spin, Switch, Tag } from 'antd'
+import { Plus, Puzzle, Trash2 } from 'lucide-react'
 import { type FC, memo, useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -64,25 +64,42 @@ const SkillCard = memo<{
 })
 SkillCard.displayName = 'SkillCard'
 
-const LocalSkillCard = memo<{ plugin: LocalSkill }>(({ plugin }) => (
-  <Card
-    className="border border-default-200"
-    title={
-      <div className="flex items-start justify-between gap-3 py-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium text-sm">{plugin.name}</span>
-          {plugin.description ? (
-            <span className="line-clamp-2 whitespace-normal text-foreground-500 text-xs">{plugin.description}</span>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <Tag color="default">local</Tag>
+// [PRISM] 2026-05-13 — 添加删除按钮，支持删除 local 技能目录
+const LocalSkillCard = memo<{ plugin: LocalSkill; workdir: string; onRemoved: (filename: string) => void }>(
+  ({ plugin, workdir, onRemoved }) => {
+    const { t } = useTranslation()
+    const handleRemove = useCallback(async () => {
+      const result = await window.api.skill.removeLocal(workdir, plugin.filename)
+      if (result.success) onRemoved(plugin.filename)
+    }, [plugin.filename, workdir, onRemoved])
+
+    return (
+      <Card
+        className="border border-default-200"
+        title={
+          <div className="flex items-start justify-between gap-3 py-2">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="truncate font-medium text-sm">{plugin.name}</span>
+              {plugin.description ? (
+                <span className="line-clamp-2 whitespace-normal text-foreground-500 text-xs">{plugin.description}</span>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Tag color="default">local</Tag>
+              </div>
+            </div>
+            <Popconfirm
+              title={t('agent.settings.skills.removeLocal', 'Remove this skill?')}
+              onConfirm={handleRemove}
+              okType="danger">
+              <Button icon={<Trash2 size={14} />} size="small" type="text" danger />
+            </Popconfirm>
           </div>
-        </div>
-      </div>
-    }
-    styles={cardStyles}
-  />
-))
+        }
+        styles={cardStyles}
+      />
+    )
+  }
+)
 LocalSkillCard.displayName = 'LocalSkillCard'
 
 /**
@@ -116,6 +133,11 @@ export const InstalledSkillsSettings: FC<AgentOrSessionSettingsProps> = ({ agent
       }
     })
   }, [workdir])
+
+  // [PRISM] 2026-05-13 — 删除本地技能后从列表中移除
+  const handleLocalRemoved = useCallback((filename: string) => {
+    setLocalSkills((prev) => prev.filter((p) => p.filename !== filename))
+  }, [])
 
   const filteredSkills = useMemo(() => {
     if (!filter.trim()) return skills
@@ -199,7 +221,7 @@ export const InstalledSkillsSettings: FC<AgentOrSessionSettingsProps> = ({ agent
                 <SkillCard key={skill.id} skill={skill} toggling={togglingId === skill.id} onToggle={handleToggle} />
               ))}
               {filteredLocal.map((plugin) => (
-                <LocalSkillCard key={plugin.filename} plugin={plugin} />
+                <LocalSkillCard key={plugin.filename} plugin={plugin} workdir={workdir ?? ''} onRemoved={handleLocalRemoved} />
               ))}
             </>
           )}

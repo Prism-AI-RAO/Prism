@@ -47,6 +47,156 @@ importers:
       gray-matter:
         specifier: 4.0.3
         version: 4.0.3
+      iconv-lite:
+        specifier: ^0.6.3
+        version: 0.6.3
+      safer-buffer:
+        specifier: ~2.1.2
+        version: 2.1.2
+      tr46:
+        specifier: ^5.1.1
+        version: 5.1.1
+      punycode:
+        specifier: ^2.3.1
+        version: 2.3.1
+      ms:
+        specifier: ^2.1.3
+        version: 2.1.3
+      b4a:
+        specifier: 1.7.3
+        version: 1.7.3
+      bytes:
+        specifier: 3.1.2
+        version: 3.1.2
+      dunder-proto:
+        specifier: 1.0.1
+        version: 1.0.1
+      ee-first:
+        specifier: 1.1.1
+        version: 1.1.1
+      es-object-atoms:
+        specifier: 1.1.1
+        version: 1.1.1
+      fast-fifo:
+        specifier: 1.3.2
+        version: 1.3.2
+      fast-json-stable-stringify:
+        specifier: 2.1.0
+        version: 2.1.0
+      forwarded:
+        specifier: 0.2.0
+        version: 0.2.0
+      get-east-asian-width:
+        specifier: 1.4.0
+        version: 1.4.0
+      ipaddr.js:
+        specifier: 2.4.0
+        version: 2.4.0
+      is-promise:
+        specifier: 4.0.0
+        version: 4.0.0
+      math-intrinsics:
+        specifier: 1.1.0
+        version: 1.1.0
+      media-typer:
+        specifier: 1.1.0
+        version: 1.1.0
+      negotiator:
+        specifier: 1.0.0
+        version: 1.0.0
+      object-inspect:
+        specifier: 1.13.4
+        version: 1.13.4
+      path-to-regexp:
+        specifier: 8.3.0
+        version: 8.3.0
+      psl:
+        specifier: 1.15.0
+        version: 1.15.0
+      setprototypeof:
+        specifier: 1.2.0
+        version: 1.2.0
+      side-channel-list:
+        specifier: 1.0.0
+        version: 1.0.0
+      side-channel-map:
+        specifier: 1.0.1
+        version: 1.0.1
+      side-channel-weakmap:
+        specifier: 1.0.2
+        version: 1.0.2
+      streamx:
+        specifier: 2.23.0
+        version: 2.23.0
+      toidentifier:
+        specifier: 1.0.1
+        version: 1.0.1
+      unpipe:
+        specifier: 1.0.0
+        version: 1.0.0
+      uri-js:
+        specifier: 4.4.1
+        version: 4.4.1
+      util-deprecate:
+        specifier: 1.0.2
+        version: 1.0.2
+      wrappy:
+        specifier: 1.0.2
+        version: 1.0.2
+      yallist:
+        specifier: 4.0.0
+        version: 4.0.0
+      '@mixmark-io/domino':
+        specifier: 2.2.0
+        version: 2.2.0
+      '@protobufjs/aspromise':
+        specifier: 1.1.2
+        version: 1.1.2
+      '@protobufjs/base64':
+        specifier: 1.1.2
+        version: 1.1.2
+      '@protobufjs/codegen':
+        specifier: 2.0.4
+        version: 2.0.4
+      '@protobufjs/eventemitter':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@protobufjs/fetch':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@protobufjs/float':
+        specifier: 1.0.2
+        version: 1.0.2
+      '@protobufjs/inquire':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@protobufjs/path':
+        specifier: 1.1.2
+        version: 1.1.2
+      '@protobufjs/pool':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@protobufjs/utf8':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@tokenizer/token':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@xmldom/xmldom':
+        specifier: 0.8.11
+        version: 0.8.11
+      core-util-is:
+        specifier: 1.0.2
+        version: 1.0.2
+      process-nextick-args:
+        specifier: 2.0.1
+        version: 2.0.1
+      ansi-regex:
+        specifier: 5.0.1
+        version: 5.0.1
+      moment:
+        specifier: 2.30.1
+        version: 2.30.1
       jsdom:
         specifier: 26.1.0
         version: 26.1.0
@@ -786,12 +936,6 @@ importers:
       i18next:
         specifier: ^23.11.5
         version: 23.16.8
-      iconv-lite:
-        specifier: ^0.6.3
-        version: 0.6.3
-      ipaddr.js:
-        specifier: ^2.2.0
-        version: 2.4.0
       isbinaryfile:
         specifier: 5.0.4
         version: 5.0.4
