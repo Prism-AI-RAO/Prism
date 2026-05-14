@@ -56,12 +56,10 @@ const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTa
       .filter((item) => (modelFilter ? modelFilter(item) : true))
 
     // [PRISM] 2026-05-14 — Also include local provider models (LM Studio, Ollama, etc.)
-    // Apply providerType filter if specified
-    const allowedProviderType = apiFilter?.providerType
+    // Local providers always shown regardless of API type filter (Prism design: all models accessible)
     const apiModelIds = new Set(adaptedApiModels.map((m) => m.id))
 
     const localAdaptedModels: AdaptedApiModel[] = localProviders
-      .filter((p) => !allowedProviderType || p.type === allowedProviderType)
       .flatMap((p) =>
         p.models
           .filter((m) => !apiModelIds.has(m.id)) // deduplicate: skip models already in API list
