@@ -1,6 +1,6 @@
 import { createSelector } from '@reduxjs/toolkit'
 import { isNotSupportTextDeltaModel } from '@renderer/config/models'
-import { CHERRYAI_PROVIDER } from '@renderer/config/providers'
+// [PRISM] 2026-05-15 — CHERRYAI_PROVIDER import removed (CherryAI彻底删除)
 import { getDefaultProvider } from '@renderer/services/AssistantService'
 import { type RootState, useAppDispatch, useAppSelector } from '@renderer/store'
 import {
@@ -37,7 +37,7 @@ const selectEnabledProviders = createSelector(selectProviders, (providers) =>
   providers
     .map(normalizeProvider)
     .filter((p) => p.enabled)
-    .concat(CHERRYAI_PROVIDER)
+  // [PRISM] 2026-05-15 — removed .concat(CHERRYAI_PROVIDER): CherryAI彻底从Prism删除
 )
 
 const selectSystemProviders = createSelector(selectProviders, (providers) =>
@@ -51,7 +51,8 @@ const selectUserProviders = createSelector(selectProviders, (providers) =>
 const selectAllProviders = createSelector(selectProviders, (providers) => providers.map(normalizeProvider))
 
 const selectAllProvidersWithCherryAI = createSelector(selectProviders, (providers) =>
-  [...providers, CHERRYAI_PROVIDER].map(normalizeProvider)
+  providers.map(normalizeProvider)
+  // [PRISM] 2026-05-15 — removed CHERRYAI_PROVIDER injection: CherryAI彻底从Prism删除
 )
 
 export function useProviders() {

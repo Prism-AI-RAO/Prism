@@ -1,5 +1,5 @@
 import { useApiModels } from '@renderer/hooks/agents/useModels'
-import { useAllProviders, useProviders } from '@renderer/hooks/useProvider' // [PRISM] 2026-05-14 — added useProviders for local model support
+import { useAllProviders } from '@renderer/hooks/useProvider' // [PRISM] 2026-05-15 — useProviders removed (injected CherryAI), use useAllProviders+enabled filter
 import type { AdaptedApiModel, ApiModel, ApiModelsFilter, Model, Provider } from '@renderer/types'
 import { apiModelAdapter } from '@renderer/utils/model'
 import { groupBy, sortBy } from 'lodash'
@@ -44,8 +44,9 @@ const buildFallbackProvider = (providerId: string, model: AdaptedApiModel): Prov
 const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTagFilter = true, resolve }) => {
   const { models: apiModels, isLoading } = useApiModels(apiFilter)
   const allProviders = useAllProviders()
-  // [PRISM] 2026-05-14 — include local providers (LM Studio, Ollama, CherryAI, etc.)
-  const { providers: localProviders } = useProviders()
+  // [PRISM] 2026-05-15 — use useAllProviders (no CherryAI injection) + filter enabled only
+  // useProviders() was injecting CHERRYAI_PROVIDER synthetically — use selectAllProviders instead
+  const localProviders = useAllProviders().filter((p) => p.enabled)
 
   const providers = useMemo(() => {
     const providerOrderMap = new Map(allProviders.map((provider, index) => [provider.id, index]))
@@ -66,7 +67,7 @@ const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTa
           .filter((m) => (modelFilter ? modelFilter(m) : true))
           .map((m) => {
             const syntheticOrigin: ApiModel = {
-              id: m.id,
+              id: `${p.id}:${m.id}`, // [PRISM] 2026-05-15 — must be provider:model_id for Prism API Server validation
               object: 'model' as const,
               created: 0,
               name: m.name,
@@ -74,7 +75,7 @@ const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTa
               provider: p.id,
               provider_name: p.name,
               provider_type: p.type as ApiModel['provider_type'],
-              provider_model_id: m.id
+              provider_model_id: m.id // raw model id (without provider prefix)
             }
             return { ...m, origin: syntheticOrigin } as AdaptedApiModel
           })
@@ -115,7 +116,7 @@ const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTa
       loading={isLoading}
       showTagFilter={showTagFilter}
       showPinnedModels={false}
-      prioritizedProviderIds={['cherryin']}
+      prioritizedProviderIds={[]} // [PRISM] 2026-05-15 — removed cherryin priority
       resolve={(value) => {
         if (value && isAdaptedApiModel(value)) {
           resolve(value.origin)
