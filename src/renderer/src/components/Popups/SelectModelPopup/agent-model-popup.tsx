@@ -1,5 +1,5 @@
 import { useApiModels } from '@renderer/hooks/agents/useModels'
-import { useAllProviders } from '@renderer/hooks/useProvider'
+import { useAllProviders, useProviders } from '@renderer/hooks/useProvider' // [PRISM] 2026-05-14 — added useProviders for local model support
 import type { AdaptedApiModel, ApiModel, ApiModelsFilter, Model, Provider } from '@renderer/types'
 import { apiModelAdapter } from '@renderer/utils/model'
 import { groupBy, sortBy } from 'lodash'
@@ -42,15 +42,48 @@ const buildFallbackProvider = (providerId: string, model: AdaptedApiModel): Prov
 }
 
 const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTagFilter = true, resolve }) => {
-  const { models, isLoading } = useApiModels(apiFilter)
+  const { models: apiModels, isLoading } = useApiModels(apiFilter)
   const allProviders = useAllProviders()
+  // [PRISM] 2026-05-14 — include local providers (LM Studio, Ollama, CherryAI, etc.)
+  const { providers: localProviders } = useProviders()
 
   const providers = useMemo(() => {
     const providerOrderMap = new Map(allProviders.map((provider, index) => [provider.id, index]))
-    const adaptedModels = models
+
+    // API models from the agents server (cloud providers)
+    const adaptedApiModels = apiModels
       .map((item) => apiModelAdapter(item))
       .filter((item) => (modelFilter ? modelFilter(item) : true))
-    const groupedModels = groupBy(adaptedModels, (item) => item.provider)
+
+    // [PRISM] 2026-05-14 — Also include local provider models (LM Studio, Ollama, etc.)
+    // Apply providerType filter if specified
+    const allowedProviderType = apiFilter?.providerType
+    const apiModelIds = new Set(adaptedApiModels.map((m) => m.id))
+
+    const localAdaptedModels: AdaptedApiModel[] = localProviders
+      .filter((p) => !allowedProviderType || p.type === allowedProviderType)
+      .flatMap((p) =>
+        p.models
+          .filter((m) => !apiModelIds.has(m.id)) // deduplicate: skip models already in API list
+          .filter((m) => (modelFilter ? modelFilter(m) : true))
+          .map((m) => {
+            const syntheticOrigin: ApiModel = {
+              id: m.id,
+              object: 'model' as const,
+              created: 0,
+              name: m.name,
+              owned_by: p.name,
+              provider: p.id,
+              provider_name: p.name,
+              provider_type: p.type as ApiModel['provider_type'],
+              provider_model_id: m.id
+            }
+            return { ...m, origin: syntheticOrigin } as AdaptedApiModel
+          })
+      )
+
+    const allAdaptedModels = [...adaptedApiModels, ...localAdaptedModels]
+    const groupedModels = groupBy(allAdaptedModels, (item) => item.provider)
 
     // 按照 provider 配置顺序排序 group keys
     return sortBy(Object.keys(groupedModels), (providerId) => providerOrderMap.get(providerId) ?? Infinity)
@@ -73,7 +106,7 @@ const PopupContainer: React.FC<Props> = ({ model, apiFilter, modelFilter, showTa
         }
       })
       .filter((provider): provider is Provider => !!provider && provider.models.length > 0)
-  }, [allProviders, modelFilter, models])
+  }, [allProviders, localProviders, modelFilter, apiModels, apiFilter])
 
   const selectedModel = useMemo(() => (model ? apiModelAdapter(model) : undefined), [model])
 
