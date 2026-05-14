@@ -294,6 +294,12 @@ export abstract class BaseService {
     agentType: AgentType,
     models: Partial<Record<AgentModelField, string | undefined>>
   ): Promise<void> {
+    // [PRISM] 2026-05-14 — generic 类型跳过模型验证，运行时由 /v1/chat/completions 处理
+    // 原因：generic Agent 通过 Prism API Server 路由，模型格式由网关层负责验证，
+    // 不要求 providerId:modelId 格式（支持 OpenClaw/自定义格式）
+    if (agentType === 'generic') {
+      return
+    }
     const entries = Object.entries(models) as [AgentModelField, string | undefined][]
     if (entries.length === 0) {
       return
