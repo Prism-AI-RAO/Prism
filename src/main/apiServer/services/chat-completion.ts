@@ -57,7 +57,8 @@ export class ChatCompletionService {
     // [PRISM] 2026-05-14 — Sprint 11-B: 扩展 chat/completions 支持范围
     // 原先只支持 openai 类型，现在扩展为支持所有主流类型：
     // openai / anthropic（OpenAI 兼容端点）/ ollama / new-api
-    const supportedChatTypes = ['openai', 'anthropic', 'ollama', 'new-api']
+    // [PRISM] 2026-05-15 — 增加 lmstudio（LM Studio 使用 OpenAI 兼容协议，直接复用 OpenAI client）
+    const supportedChatTypes = ['openai', 'anthropic', 'ollama', 'new-api', 'lmstudio']
     if (!supportedChatTypes.includes(provider.type)) {
       return {
         ok: false,
@@ -73,19 +74,19 @@ export class ChatCompletionService {
 
     // If multiple API keys are configured (comma-separated), use the first one.
     // Matches the main-process convention in OpenClawService.
-    const apiKey = provider.apiKey ? provider.apiKey.split(',')[0].trim() : ''
+    // [PRISM] 2026-05-15 — lmstudio / ollama 本地服务通常没有真实 apiKey
+    // OpenAI SDK 要求 apiKey 非空，用 'lm-studio' 作为占位（本地服务会忽略）
+    const apiKey = provider.apiKey ? provider.apiKey.split(',')[0].trim() : 'lm-studio-dummy-key'
 
-    // [PRISM] 2026-05-14 — Sprint 11-B: Anthropic 需要额外 header
-    // Anthropic 的 OpenAI 兼容端点（/v1/chat/completions）要求 anthropic-version header
-    const defaultHeaders: Record<string, string> = {}
-    if (provider.type === 'anthropic') {
-      defaultHeaders['anthropic-version'] = '2023-06-01'
-    }
-
+    // [PRISM] 2026-05-15 — 修复：不添加 anthropic-version header
+    // 原先：给 Anthropic provider 加 anthropic-version header，
+    //       但 @cherrystudio/openai SDK 检测到该 header 后切换为 Anthropic 原生 Messages API，
+    //       导致 streaming 机制不匹配（500: "Streaming is strongly recommended"）
+    // 修复：去掉 header，让所有 provider 走标准 OpenAI 兼容路径 /v1/chat/completions
+    //       Anthropic 的 OpenAI 兼容端点无需 anthropic-version header
     const client = new OpenAI({
       baseURL: provider.apiHost,
-      apiKey,
-      ...(Object.keys(defaultHeaders).length > 0 ? { defaultHeaders } : {})
+      apiKey
     })
 
     return {

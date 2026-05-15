@@ -50,6 +50,123 @@ export interface ProcessMessageResult {
   anthropicRequest: MessageCreateParams
 }
 
+
+// [PRISM] 2026-05-15 — OpenAI 兼容 Provider 类型列表
+// 这些 Provider 不支持 Anthropic Messages API，需要通过 chat/completions 翻译层
+const OPENAI_COMPATIBLE_TYPES = ['openai', 'ollama', 'lmstudio', 'new-api']
+
+/**
+ * [PRISM] 2026-05-15 — Anthropic Messages → OpenAI Chat Completions 翻译层
+ * 用于 LM Studio / Ollama / OpenAI 等不支持 Anthropic Messages API 的 Provider
+ */
+async function callOpenAICompatible(
+  provider: Provider,
+  request: MessageCreateParams,
+  modelId?: string
+): Promise<{ choices: Array<{ message: { role: string; content: string } }> }> {
+  const apiKey = provider.apiKey || 'prism-local-key'
+  const baseUrl = provider.apiHost.replace(/\/+$/, '').replace(/\/v\d+$/, '')
+  const url = `${baseUrl}/v1/chat/completions`
+  const model = modelId || request.model
+
+  // Convert Anthropic messages to OpenAI format
+  const messages: Array<{ role: string; content: string }> = []
+  if (request.system) {
+    const sys = typeof request.system === 'string' ? request.system : JSON.stringify(request.system)
+    messages.push({ role: 'system', content: sys })
+  }
+  for (const msg of request.messages) {
+    const content = typeof msg.content === 'string'
+      ? msg.content
+      : msg.content.map((c: any) => c.text || '').join('')
+    messages.push({ role: msg.role, content })
+  }
+
+  const body = JSON.stringify({ model, messages, stream: false })
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body
+  })
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => 'unknown')
+    throw new Error(`OpenAI API error ${resp.status}: ${errText.slice(0, 300)}`)
+  }
+  return resp.json()
+}
+
+async function* streamOpenAICompatible(
+  provider: Provider,
+  request: MessageCreateParams,
+  modelId?: string
+): AsyncIterable<string> {
+  const apiKey = provider.apiKey || 'prism-local-key'
+  const baseUrl = provider.apiHost.replace(/\/+$/, '').replace(/\/v\d+$/, '')
+  const url = `${baseUrl}/v1/chat/completions`
+  const model = modelId || request.model
+
+  const messages: Array<{ role: string; content: string }> = []
+  if (request.system) {
+    const sys = typeof request.system === 'string' ? request.system : JSON.stringify(request.system)
+    messages.push({ role: 'system', content: sys })
+  }
+  for (const msg of request.messages) {
+    const content = typeof msg.content === 'string'
+      ? msg.content
+      : msg.content.map((c: any) => c.text || '').join('')
+    messages.push({ role: msg.role, content })
+  }
+
+  const body = JSON.stringify({ model, messages, stream: true })
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'text/event-stream'
+    },
+    body
+  })
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => 'unknown')
+    throw new Error(`OpenAI stream error ${resp.status}: ${errText.slice(0, 300)}`)
+  }
+
+  if (!resp.body) throw new Error('No response body')
+
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t || !t.startsWith('data: ')) continue
+        const data = t.slice(6)
+        if (data === '[DONE]') return
+        try {
+          const chunk = JSON.parse(data)
+          const delta = chunk?.choices?.[0]?.delta?.content
+          if (delta) yield delta
+        } catch { /* skip */ }
+      }
+    }
+  } finally {
+    try { reader.releaseLock() } catch { /* ignore */ }
+  }
+}
+
 export class MessagesService {
   validateRequest(request: MessageCreateParams): ValidationResult {
     // TODO: Implement comprehensive request validation
@@ -157,6 +274,36 @@ export class MessagesService {
     response.setHeader('Connection', 'keep-alive')
     response.setHeader('X-Accel-Buffering', 'no')
     response.flushHeaders()
+
+    // [PRISM] 2026-05-15 — OpenAI 兼容 Provider 翻译层（LM Studio / Ollama / OpenAI）
+    if (OPENAI_COMPATIBLE_TYPES.includes(provider.type)) {
+      const msgId = `msg_prism_${Date.now()}`
+      const writeSseOAI = (payload: unknown) => {
+        if (response.writableEnded || response.destroyed) return
+        response.write(`data: ${typeof payload === 'string' ? payload : JSON.stringify(payload)}\n\n`)
+      }
+      try {
+        writeSseOAI({ type: 'message_start', message: { id: msgId, type: 'message', role: 'assistant', content: [], model: request.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } })
+        writeSseOAI({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
+        writeSseOAI({ type: 'ping' })
+        let outputTokens = 0
+        for await (const delta of streamOpenAICompatible(provider, request)) {
+          writeSseOAI({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: delta } })
+          outputTokens++
+        }
+        writeSseOAI({ type: 'content_block_stop', index: 0 })
+        writeSseOAI({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: outputTokens } })
+        writeSseOAI({ type: 'message_stop' })
+        writeSseOAI('[DONE]')
+        if (onComplete) onComplete()
+      } catch (err: any) {
+        writeSseOAI({ type: 'error', error: { type: 'api_error', message: err.message } })
+        if (onError) onError(err)
+      } finally {
+        if (!response.writableEnded) response.end()
+      }
+      return
+    }
 
     const flushableResponse = response as Response & { flush?: () => void }
     const flushStream = () => {

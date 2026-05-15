@@ -159,7 +159,12 @@ class ClaudeCodeService implements AgentServiceInterface {
     const isAnthropicType = provider.type === 'anthropic'
     const hasAnthropicHost = provider.anthropicApiHost?.trim()
 
-    if (!isAnthropicType && !isAzureOpenAI && !hasAnthropicHost) {
+    // [PRISM] 2026-05-15 — 提前判断 Prism Proxy 状态，允许非 Anthropic provider 通过代理
+    // 当 Prism API Server 运行时 (:23333)，所有 provider 类型都合法——代理负责路由
+    // 只有直连模式（代理未运行）才需要限制为 Anthropic 兼容 provider
+    const usePrismProxy = apiServer.isRunning()
+
+    if (!usePrismProxy && !isAnthropicType && !isAzureOpenAI && !hasAnthropicHost) {
       logger.error('Anthropic provider configuration is missing', {
         modelInfo
       })
@@ -200,7 +205,7 @@ class ClaudeCodeService implements AgentServiceInterface {
 
     // [PRISM] 2026-05-14 — Sprint 11-C Option B: 当 Prism API Server 运行时，通过它代理 Agent 请求
     // 这样 Agent SDK 不需要直接持有 provider 的 API Key，统一走 Prism 网关，便于审计和轮换密钥
-    const usePrismProxy = apiServer.isRunning()
+    // [PRISM] 2026-05-15 — usePrismProxy 已移至上方 provider 类型检查之前
 
     const env = {
       ...loginShellEnv,

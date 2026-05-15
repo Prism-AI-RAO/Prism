@@ -30,7 +30,8 @@ export async function getAvailableProviders(): Promise<Provider[]> {
     }
 
     // Support OpenAI-compatible and Anthropic-compatible providers for API server
-    const supportedTypes: ProviderType[] = ['openai', 'anthropic', 'ollama', 'new-api']
+    // [PRISM] 2026-05-15 — 增加 lmstudio 支持（LM Studio 是 OpenAI 兼容协议）
+    const supportedTypes: ProviderType[] = ['openai', 'anthropic', 'ollama', 'new-api', 'lmstudio']
     const supportedProviders = providers.filter((p: Provider) => p.enabled && supportedTypes.includes(p.type))
 
     // Format provider apiHost according to their type
@@ -181,18 +182,19 @@ export async function validateModelId(model: string): Promise<{
       }
     }
 
-    // Check if model exists in provider
+    // [PRISM] 2026-05-15 — 去掉严格的 model 存在性检查
+    // 原先：model 必须在 provider.models 列表中精确匹配，否则报错
+    // 修改：改为 warning 日志，允许继续执行（让上游 API 决定是否支持该 model）
+    // 原因：动态模型（LM Studio 按需加载）、新上线模型均不一定在静态列表中
     const modelExists = provider.models?.some((m) => m.id === modelId)
     if (!modelExists) {
       const availableModels = provider.models?.map((m) => m.id).join(', ') || 'none'
-      return {
-        valid: false,
-        error: {
-          type: 'model_not_available',
-          message: `Model '${modelId}' not available in provider '${providerId}'. Available models: ${availableModels}`,
-          code: 'model_not_available'
-        }
-      }
+      logger.warn('[PRISM] Model not in static list, but will attempt anyway', {
+        modelId,
+        providerId,
+        availableModels
+      })
+      // Continue — let the upstream API decide
     }
 
     return {
