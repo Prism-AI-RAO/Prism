@@ -1,5 +1,9 @@
-import OpenAI from '@cherrystudio/openai'
-import type { ChatCompletionCreateParams, ChatCompletionCreateParamsStreaming } from '@cherrystudio/openai/resources'
+// [PRISM] 2026-05-15 — 完全重建：丢弃 @cherrystudio/openai，改用原生 fetch + SSE
+// 原因：@cherrystudio/openai 对 Anthropic provider 有特殊处理，切换到原生 Messages API，
+//       导致 streaming 方式不匹配（HTTP 500: "Streaming is strongly recommended"）
+// 新方案：直接 fetch → text/event-stream → 解析 SSE，对所有 OpenAI 兼容端点统一有效
+//         支持：OpenClaw / DeepSeek / Anthropic(OpenAI兼容) / LM Studio / Ollama / new-api
+
 import type { Provider } from '@types'
 
 import { loggerService } from '../../services/LoggerService'
@@ -7,6 +11,23 @@ import type { ModelValidationError } from '../utils'
 import { validateModelId } from '../utils'
 
 const logger = loggerService.withContext('ChatCompletionService')
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface ChatCompletionChunk {
+  id: string
+  object: string
+  created: number
+  model: string
+  choices: Array<{
+    index: number
+    delta: {
+      role?: string
+      content?: string | null
+    }
+    finish_reason: string | null
+  }>
+}
 
 export interface ValidationResult {
   isValid: boolean
@@ -27,240 +48,221 @@ export class ChatCompletionModelError extends Error {
   }
 }
 
-export type PrepareRequestResult =
-  | { status: 'validation_error'; errors: string[] }
-  | { status: 'model_error'; error: ModelValidationError }
-  | {
-      status: 'ok'
-      provider: Provider
-      modelId: string
-      client: OpenAI
-      providerRequest: ChatCompletionCreateParams
+// ─── URL Helper ──────────────────────────────────────────────────────────────
+
+/**
+ * 从 provider.apiHost 构建 chat/completions 端点 URL
+ * 处理各种格式：
+ *   https://api.anthropic.com          → https://api.anthropic.com/v1/chat/completions
+ *   https://api.anthropic.com/v1       → https://api.anthropic.com/v1/chat/completions
+ *   https://api.anthropic.com/v1/messages → https://api.anthropic.com/v1/chat/completions
+ *   http://127.0.0.1:18789/v1         → http://127.0.0.1:18789/v1/chat/completions
+ *   http://localhost:1234/v1           → http://localhost:1234/v1/chat/completions
+ */
+function buildChatCompletionUrl(apiHost: string): string {
+  // Remove trailing slashes
+  let base = apiHost.replace(/\/+$/, '')
+
+  // Strip known native-API suffixes that aren't the OpenAI-compatible base
+  base = base.replace(/\/messages$/, '')   // Anthropic native: /v1/messages
+  base = base.replace(/\/completions$/, '') // already has path
+
+  // Ensure /v1 is present
+  if (!base.match(/\/v\d+$/)) {
+    base = base + '/v1'
+  }
+
+  return base + '/chat/completions'
+}
+
+// ─── SSE Parser ──────────────────────────────────────────────────────────────
+
+async function* parseSSEStream(
+  body: ReadableStream<Uint8Array>
+): AsyncIterable<ChatCompletionChunk> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+        const data = trimmed.slice(6)
+        if (data === '[DONE]') return
+
+        try {
+          const chunk = JSON.parse(data) as ChatCompletionChunk
+          yield chunk
+        } catch {
+          // Skip malformed JSON lines (keep-alive, comments, etc.)
+        }
+      }
     }
+  } finally {
+    try { reader.releaseLock() } catch { /* ignore */ }
+  }
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
 
 export class ChatCompletionService {
+
+  private readonly supportedTypes = ['openai', 'anthropic', 'ollama', 'new-api', 'lmstudio']
+
   async resolveProviderContext(
     model: string
   ): Promise<
-    { ok: false; error: ModelValidationError } | { ok: true; provider: Provider; modelId: string; client: OpenAI }
+    | { ok: false; error: ModelValidationError }
+    | { ok: true; provider: Provider; modelId: string; url: string; apiKey: string }
   > {
     const modelValidation = await validateModelId(model)
     if (!modelValidation.valid) {
-      return {
-        ok: false,
-        error: modelValidation.error!
-      }
+      return { ok: false, error: modelValidation.error! }
     }
 
     const provider = modelValidation.provider!
 
-    // [PRISM] 2026-05-14 — Sprint 11-B: 扩展 chat/completions 支持范围
-    // 原先只支持 openai 类型，现在扩展为支持所有主流类型：
-    // openai / anthropic（OpenAI 兼容端点）/ ollama / new-api
-    // [PRISM] 2026-05-15 — 增加 lmstudio（LM Studio 使用 OpenAI 兼容协议，直接复用 OpenAI client）
-    const supportedChatTypes = ['openai', 'anthropic', 'ollama', 'new-api', 'lmstudio']
-    if (!supportedChatTypes.includes(provider.type)) {
+    if (!this.supportedTypes.includes(provider.type)) {
       return {
         ok: false,
         error: {
           type: 'unsupported_provider_type',
-          message: `Provider '${provider.id}' of type '${provider.type}' is not supported for chat completions. Supported types: ${supportedChatTypes.join(', ')}`,
+          message: `Provider '${provider.id}' (type '${provider.type}') is not supported. Supported: ${this.supportedTypes.join(', ')}`,
           code: 'unsupported_provider_type'
         }
       }
     }
 
     const modelId = modelValidation.modelId!
+    // Use first key if comma-separated; use dummy for keyless local providers
+    const apiKey = provider.apiKey ? provider.apiKey.split(',')[0].trim() : 'prism-local-key'
+    const url = buildChatCompletionUrl(provider.apiHost)
 
-    // If multiple API keys are configured (comma-separated), use the first one.
-    // Matches the main-process convention in OpenClawService.
-    // [PRISM] 2026-05-15 — lmstudio / ollama 本地服务通常没有真实 apiKey
-    // OpenAI SDK 要求 apiKey 非空，用 'lm-studio' 作为占位（本地服务会忽略）
-    const apiKey = provider.apiKey ? provider.apiKey.split(',')[0].trim() : 'lm-studio-dummy-key'
-
-    // [PRISM] 2026-05-15 — 修复：不添加 anthropic-version header
-    // 原先：给 Anthropic provider 加 anthropic-version header，
-    //       但 @cherrystudio/openai SDK 检测到该 header 后切换为 Anthropic 原生 Messages API，
-    //       导致 streaming 机制不匹配（500: "Streaming is strongly recommended"）
-    // 修复：去掉 header，让所有 provider 走标准 OpenAI 兼容路径 /v1/chat/completions
-    //       Anthropic 的 OpenAI 兼容端点无需 anthropic-version header
-    const client = new OpenAI({
-      baseURL: provider.apiHost,
-      apiKey
-    })
-
-    return {
-      ok: true,
-      provider,
-      modelId,
-      client
-    }
-  }
-
-  async prepareRequest(request: ChatCompletionCreateParams, stream: boolean): Promise<PrepareRequestResult> {
-    const requestValidation = this.validateRequest(request)
-    if (!requestValidation.isValid) {
-      return {
-        status: 'validation_error',
-        errors: requestValidation.errors
-      }
-    }
-
-    const providerContext = await this.resolveProviderContext(request.model)
-    if (!providerContext.ok) {
-      return {
-        status: 'model_error',
-        error: providerContext.error
-      }
-    }
-
-    const { provider, modelId, client } = providerContext
-
-    logger.debug('Model validation successful', {
+    logger.debug('[PRISM] resolveProviderContext', {
       provider: provider.id,
-      providerType: provider.type,
+      type: provider.type,
       modelId,
-      fullModelId: request.model
+      url
     })
 
+    return { ok: true, provider, modelId, url, apiKey }
+  }
+
+  async processStreamingCompletion(request: {
+    model: string
+    messages: Array<{ role: string; content: string }>
+    stream?: boolean
+    [key: string]: unknown
+  }): Promise<{
+    provider: Provider
+    modelId: string
+    stream: AsyncIterable<ChatCompletionChunk>
+  }> {
+    const requestMessages = request.messages
+    if (!requestMessages || !Array.isArray(requestMessages) || requestMessages.length === 0) {
+      throw new ChatCompletionValidationError(['Messages array is required and cannot be empty'])
+    }
+
+    const context = await this.resolveProviderContext(request.model)
+    if (!context.ok) {
+      throw new ChatCompletionModelError(context.error)
+    }
+
+    const { provider, modelId, url, apiKey } = context
+
+    logger.info('[PRISM] Streaming completion via native fetch', {
+      provider: provider.id,
+      type: provider.type,
+      modelId,
+      url,
+      messageCount: requestMessages.length
+    })
+
+    // Build request body — only include what's needed, no SDK magic
+    const body = JSON.stringify({
+      model: modelId,
+      messages: requestMessages,
+      stream: true
+    })
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'text/event-stream'
+      },
+      body
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'unknown error')
+      logger.error('[PRISM] API request failed', {
+        status: response.status,
+        url,
+        provider: provider.id,
+        error: errorText.slice(0, 500)
+      })
+      throw new Error(`API Error: ${response.status} ${errorText}`)
+    }
+
+    if (!response.body) {
+      throw new Error('No response body from API')
+    }
+
+    logger.info('[PRISM] Stream started', { provider: provider.id, modelId, url })
+
     return {
-      status: 'ok',
       provider,
       modelId,
-      client,
-      providerRequest: stream
-        ? {
-            ...request,
-            model: modelId,
-            stream: true as const
-          }
-        : {
-            ...request,
-            model: modelId,
-            stream: false as const
-          }
+      stream: parseSSEStream(response.body)
     }
   }
 
-  validateRequest(request: ChatCompletionCreateParams): ValidationResult {
-    const errors: string[] = []
-
-    // Only validate minimal structure required for routing.
-    // Detailed message validation is delegated to the upstream provider.
-    if (!request.messages) {
-      errors.push('Messages array is required')
-    } else if (!Array.isArray(request.messages)) {
-      errors.push('Messages must be an array')
-    } else if (request.messages.length === 0) {
-      errors.push('Messages array cannot be empty')
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    }
-  }
-
-  async processCompletion(request: ChatCompletionCreateParams): Promise<{
+  // Non-streaming variant (kept for compatibility, rarely used in agents)
+  async processCompletion(request: {
+    model: string
+    messages: Array<{ role: string; content: string }>
+    [key: string]: unknown
+  }): Promise<{
     provider: Provider
     modelId: string
-    response: OpenAI.Chat.Completions.ChatCompletion
+    response: { choices: Array<{ message: { content: string } }> }
   }> {
-    try {
-      logger.debug('Processing chat completion request', {
-        model: request.model,
-        messageCount: request.messages.length,
-        stream: request.stream
-      })
-
-      const preparation = await this.prepareRequest(request, false)
-      if (preparation.status === 'validation_error') {
-        throw new ChatCompletionValidationError(preparation.errors)
-      }
-
-      if (preparation.status === 'model_error') {
-        throw new ChatCompletionModelError(preparation.error)
-      }
-
-      const { provider, modelId, client, providerRequest } = preparation
-
-      logger.debug('Sending request to provider', {
-        provider: provider.id,
-        model: modelId,
-        apiHost: provider.apiHost
-      })
-
-      const response = (await client.chat.completions.create(providerRequest)) as OpenAI.Chat.Completions.ChatCompletion
-
-      logger.info('Chat completion processed', {
-        modelId,
-        provider: provider.id
-      })
-      return {
-        provider,
-        modelId,
-        response
-      }
-    } catch (error: any) {
-      logger.error('Error processing chat completion', {
-        error,
-        model: request.model
-      })
-      throw error
+    const context = await this.resolveProviderContext(request.model)
+    if (!context.ok) {
+      throw new ChatCompletionModelError(context.error)
     }
-  }
 
-  async processStreamingCompletion(request: ChatCompletionCreateParams): Promise<{
-    provider: Provider
-    modelId: string
-    stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
-  }> {
-    try {
-      logger.debug('Processing streaming chat completion request', {
-        model: request.model,
-        messageCount: request.messages.length
-      })
+    const { provider, modelId, url, apiKey } = context
 
-      const preparation = await this.prepareRequest(request, true)
-      if (preparation.status === 'validation_error') {
-        throw new ChatCompletionValidationError(preparation.errors)
-      }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ model: modelId, messages: request.messages, stream: false })
+    })
 
-      if (preparation.status === 'model_error') {
-        throw new ChatCompletionModelError(preparation.error)
-      }
-
-      const { provider, modelId, client, providerRequest } = preparation
-
-      logger.debug('Sending streaming request to provider', {
-        provider: provider.id,
-        model: modelId,
-        apiHost: provider.apiHost
-      })
-
-      const streamRequest = providerRequest as ChatCompletionCreateParamsStreaming
-      const stream = (await client.chat.completions.create(
-        streamRequest
-      )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
-
-      logger.info('Streaming chat completion started', {
-        modelId,
-        provider: provider.id
-      })
-      return {
-        provider,
-        modelId,
-        stream
-      }
-    } catch (error: any) {
-      logger.error('Error processing streaming chat completion', {
-        error,
-        model: request.model
-      })
-      throw error
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'unknown error')
+      throw new Error(`API Error: ${response.status} ${errorText}`)
     }
+
+    const data = await response.json()
+    return { provider, modelId, response: data }
   }
 }
 
-// Export singleton instance
 export const chatCompletionService = new ChatCompletionService()

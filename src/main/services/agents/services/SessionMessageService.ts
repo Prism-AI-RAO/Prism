@@ -191,6 +191,11 @@ export class SessionMessageService extends BaseService {
 
     // [PRISM] 2026-05-14 — generic 类型走 ChatCompletionService，不使用 Claude Code SDK
     // 原因：generic Agent 使用任意 Provider（非 Anthropic），通过 Prism API Server 路由
+    // [PRISM2] 2026-05-15 — prism-native: 自主 Agent 执行引擎，不依赖 Claude SDK
+    if (session.agent_type === 'prism-native') {
+      return await startPrismNativeAgentStream(session, req, abortController, agentSessionId, options)
+    }
+
     if (session.agent_type === 'generic') {
       return await this.startGenericAgentStream(session, req, abortController, agentSessionId, options)
     }
