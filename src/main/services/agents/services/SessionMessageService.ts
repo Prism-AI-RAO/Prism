@@ -20,6 +20,7 @@ import { sessionMessagesTable } from '../database/schema'
 import { agentMessageRepository } from '../database/sessionMessageRepository'
 import type { AgentStreamEvent } from '../interfaces/AgentStreamInterface'
 import ClaudeCodeService from './claudecode'
+import { startPrismNativeAgentStream } from './prismnative' // [PRISM2] 2026-05-15 — prism-native agentType
 
 const claudeCodeService = new ClaudeCodeService()
 
@@ -541,21 +542,27 @@ export class SessionMessageService extends BaseService {
     const stream = new ReadableStream<TextStreamPart<Record<string, any>>>({
       start: async (controller) => {
         controller.enqueue({ type: 'text-start', id: textBlockId } as TextStreamPart<Record<string, any>>)
+        let chunkCount = 0
         try {
+          logger.info('[PRISM] generic stream: calling processStreamingCompletion', { model })
           // API 调用在 start 内部，不阻塞 startGenericAgentStream 的返回
-          const { stream: openaiStream } = await chatCompletionService.processStreamingCompletion({
+          const { stream: openaiStream, provider, modelId } = await chatCompletionService.processStreamingCompletion({
             model,
             messages,
             stream: true as const
           })
+          logger.info('[PRISM] generic stream: API connected', { provider: provider.id, modelId })
           for await (const chunk of openaiStream) {
+            chunkCount++
             if (abortController.signal.aborted) {
+              logger.info('[PRISM] generic stream: aborted', { chunkCount, fullTextLen: fullText.length })
               controller.enqueue({ type: 'text-end', id: textBlockId } as TextStreamPart<Record<string, any>>)
               controller.close()
               persistResult(fullText)
               return
             }
             const delta = chunk.choices[0]?.delta?.content
+            const finishReason = chunk.choices[0]?.finish_reason
             if (delta) {
               fullText += delta
               controller.enqueue({
@@ -564,18 +571,23 @@ export class SessionMessageService extends BaseService {
                 text: delta
               } as TextStreamPart<Record<string, any>>)
             }
+            if (finishReason) {
+              logger.info('[PRISM] generic stream: finish_reason received', { finishReason, chunkCount, fullTextLen: fullText.length })
+            }
           }
           // Stream complete
+          logger.info('[PRISM] generic stream: for-await loop done', { chunkCount, fullTextLen: fullText.length })
           controller.enqueue({ type: 'text-end', id: textBlockId } as TextStreamPart<Record<string, any>>)
           controller.close()
           persistResult(fullText)
         } catch (error) {
-          logger.error('[PRISM] generic agent stream error', error as Error)
+          logger.error('[PRISM] generic agent stream error', { error, chunkCount, fullTextLen: fullText.length })
           controller.error(error)
           rejectCompletion(serializeError(error))
         }
       },
       cancel: () => {
+        logger.info('[PRISM] generic stream: ReadableStream cancelled')
         abortController.abort('stream cancelled')
         resolveCompletion({})
       }
